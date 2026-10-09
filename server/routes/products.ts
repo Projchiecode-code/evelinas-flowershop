@@ -4,8 +4,8 @@ import { bouquets } from '../../src/app/data/bouquets';
 
 const router = Router();
 
-// Seed products from existing data (one-time)
-router.post('/seed', async (_req, res) => {
+// Seed products from existing data (one-time) - supports both GET and POST for easy browser access
+const seedProducts = async (_req: any, res: any) => {
   try {
     const existing = await Bouquet.countDocuments();
     if (existing > 0) {
@@ -16,7 +16,10 @@ router.post('/seed', async (_req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
+};
+
+router.get('/seed', seedProducts);
+router.post('/seed', seedProducts);
 
 router.get('/', async (req, res) => {
   try {
