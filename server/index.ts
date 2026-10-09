@@ -11,6 +11,8 @@ import galleryRoutes from './routes/gallery';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
 import { getJwtSecret } from './middleware/auth';
+import { errorResponse } from './utils/httpError';
+import helmet from 'helmet';
 
 dotenv.config();
 
@@ -20,6 +22,14 @@ getJwtSecret();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
+
+// Render sits behind their reverse proxy — trust exactly one hop so the rate
+// limiter keys on the real client IP instead of the proxy's address.
+app.set('trust proxy', 1);
+
+// Baseline security headers. CSP/CORP are off: this API serves JSON to the
+// cross-origin SPA (CSP on JSON does nothing, CORP could interfere).
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -42,8 +52,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/users', userRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  errorResponse(res, err.status || 500, err);
 });
 
 const start = async () => {

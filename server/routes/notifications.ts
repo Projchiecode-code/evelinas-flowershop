@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Notification from '../models/Notification';
+import { errorResponse } from '../utils/httpError';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -7,13 +8,22 @@ const router = Router();
 router.post('/', authenticate, async (req: any, res) => {
   try {
     const { title, message, type, link, broadcast } = req.body;
-    if (!title || !message) {
+    if (typeof title !== 'string' || typeof message !== 'string' || !title.trim() || !message.trim()) {
       return res.status(400).json({ error: 'Title and message are required' });
+    }
+    if (title.length > 300 || message.length > 3000) {
+      return res.status(400).json({ error: 'Title (max 300) or message (max 3000) is too long' });
+    }
+    // The bell renders `link` straight into an <a href> — anything but a
+    // relative app path (javascript:, data:) would run on click.
+    if (link !== undefined && link !== null && link !== ''
+      && (typeof link !== 'string' || link.length > 500 || !link.startsWith('/'))) {
+      return res.status(400).json({ error: 'Link must be a relative app path (starting with /)' });
     }
     const notification = new Notification({
       title,
       message,
-      type: type || 'system',
+      type: typeof type === 'string' && type ? type.slice(0, 50) : 'system',
       link: link || '',
       // Admins can broadcast (user: null → delivered to every customer's
       // bell); anyone else only ever notifies themselves.
@@ -41,7 +51,7 @@ router.get('/', authenticate, async (req: any, res) => {
       return obj;
     }));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -68,7 +78,7 @@ router.patch('/:id/read', authenticate, async (req: any, res) => {
     await notification.save();
     res.json(notification);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -85,7 +95,7 @@ router.patch('/read-all', authenticate, async (req: any, res) => {
     );
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -101,7 +111,7 @@ router.delete('/:id', authenticate, async (req: any, res) => {
     await Notification.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 

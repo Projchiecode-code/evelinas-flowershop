@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import User from '../models/User';
+import { errorResponse } from '../utils/httpError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
@@ -12,7 +13,7 @@ router.get('/', authenticate, requireAdmin, async (req: any, res) => {
     const users = await User.find().select('-password').sort({ createdAt: -1 });
     res.json(users);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -24,7 +25,7 @@ router.get('/:id', authenticate, requireAdmin, async (req, res) => {
     }
     res.json(user);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -47,7 +48,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req: any, res) => {
     }
     res.json(user);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -59,7 +60,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req: any, res) => {
     }
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 

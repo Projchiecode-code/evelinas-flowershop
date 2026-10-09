@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Review from '../models/Review';
+import { errorResponse } from '../utils/httpError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
@@ -10,16 +11,36 @@ const router = Router();
 router.post('/', authenticate, async (req: any, res) => {
   try {
     const { bouquetId, orderId, rating, comment, photos } = req.body;
-    if (!bouquetId || !rating || !comment) {
+    if (!bouquetId || !comment) {
       return res.status(400).json({ error: 'Bouquet ID, rating, and comment are required' });
+    }
+    const numericRating = Number(rating);
+    if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+    if (typeof comment !== 'string' || !comment.trim() || comment.length > 5000) {
+      return res.status(400).json({ error: 'Review must be 1–5000 characters' });
+    }
+    // Photo attachments: images only, bounded per photo and in count so one
+    // review can't approach Mongo's 16 MB document limit.
+    if (photos !== undefined && photos !== null) {
+      if (!Array.isArray(photos) || photos.length > 5) {
+        return res.status(400).json({ error: 'You can attach up to 5 photos' });
+      }
+      for (const photo of photos) {
+        if (typeof photo !== 'string' || photo.length > 3_000_000 || !photo.startsWith('data:image/')) {
+          return res.status(400).json({ error: 'Each photo must be an image under 3 MB' });
+        }
+      }
     }
     const review = new Review({
       bouquet: bouquetId,
-      orderId,
-      customerName: req.body.customerName || 'Anonymous',
-      customerEmail: req.body.customerEmail || '',
+      orderId: typeof orderId === 'string' ? orderId.slice(0, 60) : undefined,
+      customerName: typeof req.body.customerName === 'string' && req.body.customerName
+        ? req.body.customerName.slice(0, 120) : 'Anonymous',
+      customerEmail: typeof req.body.customerEmail === 'string' ? req.body.customerEmail.slice(0, 254) : '',
       customer: req.userId,
-      rating,
+      rating: numericRating,
       comment,
       photos: photos || [],
       approved: false,
@@ -37,7 +58,7 @@ router.get('/', async (_req, res) => {
     const reviews = await Review.find().sort({ createdAt: -1 });
     res.json(reviews);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -46,7 +67,7 @@ router.get('/:bouquetId', async (req, res) => {
     const reviews = await Review.find({ bouquet: req.params.bouquetId, approved: true }).sort({ createdAt: -1 });
     res.json(reviews);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -60,7 +81,7 @@ router.patch('/:id/approve', authenticate, requireAdmin, async (req: any, res) =
     await review.save();
     res.json(review);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -74,7 +95,7 @@ router.patch('/:id/feature', authenticate, requireAdmin, async (req: any, res) =
     await review.save();
     res.json(review);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -86,7 +107,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     }
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 

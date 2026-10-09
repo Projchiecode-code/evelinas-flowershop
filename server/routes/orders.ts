@@ -3,7 +3,12 @@ import Order from '../models/Order';
 import Bouquet from '../models/Bouquet';
 import Notification from '../models/Notification';
 import User from '../models/User';
+import { errorResponse } from '../utils/httpError';
 import { authenticate } from '../middleware/auth';
+
+// Mirrors the status enum on the Order schema (kept as a literal union so
+// assignments to `order.status` typecheck after runtime validation).
+type OrderStatus = 'to-pay' | 'to-ship' | 'to-receive' | 'to-rate' | 'rated' | 'cancelled';
 
 const STATUS_MESSAGES: Record<string, string> = {
   'to-pay': 'Order placed — awaiting payment',
@@ -48,8 +53,29 @@ router.post('/', authenticate, async (req: any, res) => {
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Cart is empty' });
     }
-    if (!customerName || !email || !phone || !deliveryAddress) {
+    if (typeof customerName !== 'string' || typeof email !== 'string'
+      || typeof phone !== 'string' || typeof deliveryAddress !== 'string'
+      || !customerName || !email || !phone || !deliveryAddress) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (customerName.length > 120 || email.length > 254 || phone.length > 40 || deliveryAddress.length > 1000) {
+      return res.status(400).json({ error: 'Order details are too long' });
+    }
+    if (paymentMethod !== undefined && paymentMethod !== null && paymentMethod !== ''
+      && !['cod', 'e-wallet', 'bank-transfer'].includes(paymentMethod)) {
+      return res.status(400).json({ error: 'Invalid payment method' });
+    }
+    if (paymentProof) {
+      // Screenshots arrive as data URLs (also accept plain http(s) links).
+      // The cap stops a crafted order from ballooning toward Mongo's 16 MB doc limit.
+      if (typeof paymentProof !== 'string' || paymentProof.length > 8_000_000
+        || !(paymentProof.startsWith('data:image/') || /^https?:\/\//.test(paymentProof))) {
+        return res.status(400).json({ error: 'Payment proof must be an image under 8 MB' });
+      }
+    }
+    if (estimatedDelivery !== undefined && estimatedDelivery !== null && estimatedDelivery !== ''
+      && Number.isNaN(new Date(estimatedDelivery).getTime())) {
+      return res.status(400).json({ error: 'Invalid estimated delivery date' });
     }
     for (const item of items) {
       const quantity = Number(item?.quantity);
@@ -138,8 +164,7 @@ router.post('/', authenticate, async (req: any, res) => {
 
     res.status(201).json(populated);
   } catch (err: any) {
-    console.error('Create order error:', err);
-    res.status(500).json({ error: err.message || 'Failed to create order' });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -152,7 +177,7 @@ router.get('/', authenticate, async (req: any, res) => {
     const orders = await query.populate('items.bouquet');
     res.json(orders);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
@@ -167,22 +192,38 @@ router.get('/:id', authenticate, async (req: any, res) => {
     }
     res.json(order);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
 router.patch('/:id/status', authenticate, async (req: any, res) => {
   try {
-    // Only the shop owner moves orders through the pipeline — without this
-    // any signed-in customer could cancel someone else's order.
-    if (req.userRole !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
+    const status = req.body.status as OrderStatus;
+    if (typeof status !== 'string' || !(status in STATUS_MESSAGES)) {
+      return res.status(400).json({ error: 'Invalid order status' });
     }
-
-    const { status } = req.body;
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+    if (req.userRole !== 'admin') {
+      // Own order only — nobody touches anyone else's pipeline.
+      if (order.customer?.toString() !== req.userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      // Customers may only confirm receipt, complete an unrated order, or
+      // cancel — never advance the payment/delivery pipeline (self-marking
+      // "to-ship" would mean free goods). Allowed "from" states mirror the
+      // buttons the UI actually shows.
+      const CUSTOMER_STATUS: Record<string, string[]> = {
+        'to-rate': ['to-receive', 'to-rate'],
+        'rated': ['to-rate', 'rated'],
+        'cancelled': ['to-pay', 'to-ship'],
+      };
+      const allowedFrom = CUSTOMER_STATUS[status];
+      if (!allowedFrom || !allowedFrom.includes(order.status)) {
+        return res.status(403).json({ error: 'You cannot move this order to that status' });
+      }
     }
     const previousStatus = order.status;
     order.status = status;
@@ -192,9 +233,15 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
       message: STATUS_MESSAGES[status],
       location: STATUS_LOCATIONS[status],
     });
-    if (status === 'rated') {
-      order.rating = req.body.rating;
-      order.ratingComment = req.body.comment;
+    if (status === 'rated' && req.body.rating !== undefined && req.body.rating !== null) {
+      const rating = Number(req.body.rating);
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+      }
+      order.rating = rating;
+      if (typeof req.body.comment === 'string') {
+        order.ratingComment = req.body.comment.slice(0, 1000);
+      }
     }
     await order.save();
 
@@ -217,13 +264,17 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
     const populated = await order.populate('items.bouquet');
     res.json(populated);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 
 router.patch('/:id/rate', authenticate, async (req: any, res) => {
   try {
     const { rating, comment } = req.body;
+    const numericRating = Number(rating);
+    if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -233,8 +284,8 @@ router.patch('/:id/rate', authenticate, async (req: any, res) => {
     if (req.userRole !== 'admin' && order.customer?.toString() !== req.userId) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    order.rating = rating;
-    order.ratingComment = comment;
+    order.rating = numericRating;
+    order.ratingComment = typeof comment === 'string' ? comment.slice(0, 1000) : '';
     order.status = 'rated';
     order.trackingUpdates.push({
       status: 'rated',
@@ -246,7 +297,7 @@ router.patch('/:id/rate', authenticate, async (req: any, res) => {
     const populated = await order.populate('items.bouquet');
     res.json(populated);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    errorResponse(res, 500, err);
   }
 });
 

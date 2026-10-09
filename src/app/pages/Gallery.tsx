@@ -217,6 +217,9 @@ export function Gallery() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Please upload an image file'); return; }
+    // Data URLs grow ~4/3 — 6 MB keeps the submission well under the server's cap.
+    if (file.size > 6 * 1024 * 1024) { toast.error('Photo must be under 6 MB'); return; }
     const reader = new FileReader();
     reader.onloadend = () => setImagePreview(reader.result as string);
     reader.readAsDataURL(file);

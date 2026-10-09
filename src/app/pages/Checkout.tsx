@@ -109,6 +109,7 @@ export function Checkout() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please upload an image file'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error('Payment proof must be under 5 MB'); return; }
     setProofFileName(file.name);
     const reader = new FileReader();
     reader.onloadend = () => setProofFile(reader.result as string);

@@ -106,7 +106,11 @@ export function BouquetDetail() {
 
   const handleReviewPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    files.forEach(file => {
+    // Server allows 5 photos at 3 MB each — enforce both here for instant feedback.
+    const room = 5 - reviewPhotos.length;
+    if (files.length > room) toast.error('You can attach up to 5 photos');
+    files.slice(0, Math.max(0, room)).forEach(file => {
+      if (file.size > 2 * 1024 * 1024) { toast.error('Each photo must be under 2 MB'); return; }
       const reader = new FileReader();
       reader.onloadend = () => setReviewPhotos(prev => [...prev, reader.result as string]);
       reader.readAsDataURL(file);
