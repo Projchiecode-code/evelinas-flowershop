@@ -40,28 +40,53 @@ async function notify(userId: string | null, title: string, message: string, lin
 
 router.post('/', authenticate, async (req: any, res) => {
   try {
-    const { items, total, deliveryFee, customerName, deliveryAddress, phone, email, paymentMethod, paymentProof, estimatedDelivery } = req.body;
+    // `total`/`deliveryFee` are deliberately NOT read from the body: money is
+    // recomputed below from database prices, so a tampered client can't decide
+    // what it pays (and every revenue report stays trustworthy).
+    const { items, customerName, deliveryAddress, phone, email, paymentMethod, paymentProof, estimatedDelivery } = req.body;
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Cart is empty' });
     }
     if (!customerName || !email || !phone || !deliveryAddress) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    for (const item of items) {
+      const quantity = Number(item?.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        return res.status(400).json({ error: 'Each item needs a whole quantity of at least 1' });
+      }
+    }
 
-    const populatedItems = await Promise.all(
-      items.map(async (item: any) => {
-        const bouquet = await Bouquet.findById(item.bouquet);
-        if (!bouquet) throw new Error(`Bouquet not found: ${item.bouquet}`);
-        return {
-          bouquet: bouquet._id,
-          quantity: item.quantity,
-          customMessage: item.customMessage || '',
-          deliveryDate: item.deliveryDate || '',
-          price: bouquet.price,
-        };
-      })
-    );
+    let populatedItems: Array<{
+      bouquet: any;
+      quantity: number;
+      customMessage: string;
+      deliveryDate: string;
+      price: number;
+    }>;
+    try {
+      populatedItems = await Promise.all(
+        items.map(async (item: any) => {
+          const bouquet = await Bouquet.findById(item.bouquet);
+          if (!bouquet) throw new Error(`Bouquet not available: ${item.bouquet}`);
+          return {
+            bouquet: bouquet._id,
+            quantity: Number(item.quantity),
+            customMessage: item.customMessage || '',
+            deliveryDate: item.deliveryDate || '',
+            price: bouquet.price,
+          };
+        })
+      );
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    // Same rule the UI shows: free delivery when the subtotal tops $100.
+    const subtotal = populatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const deliveryFee = subtotal > 100 ? 0 : 9.99;
+    const total = subtotal + deliveryFee;
 
     const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
     const now = new Date();
@@ -202,6 +227,11 @@ router.patch('/:id/rate', authenticate, async (req: any, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+    // Only the order's owner (or an admin) may rate it — otherwise any
+    // signed-in user could stamp ratings and status 'rated' on anyone's order.
+    if (req.userRole !== 'admin' && order.customer?.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Access denied' });
     }
     order.rating = rating;
     order.ratingComment = comment;

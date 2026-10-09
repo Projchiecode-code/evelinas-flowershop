@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Bouquet from '../models/Bouquet';
 import { bouquets } from '../../src/app/data/bouquets';
+import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
@@ -18,8 +19,9 @@ const seedProducts = async (_req: any, res: any) => {
   }
 };
 
-router.get('/seed', seedProducts);
-router.post('/seed', seedProducts);
+// Seeding writes to the live catalog — admin only.
+router.get('/seed', authenticate, requireAdmin, seedProducts);
+router.post('/seed', authenticate, requireAdmin, seedProducts);
 
 router.get('/', async (req, res) => {
   try {
@@ -53,7 +55,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
     const product = new Bouquet(req.body);
     await product.save();
@@ -63,7 +65,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const product = await Bouquet.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!product) {
@@ -75,7 +77,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const product = await Bouquet.findByIdAndDelete(req.params.id);
     if (!product) {

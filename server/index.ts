@@ -10,8 +10,13 @@ import reviewRoutes from './routes/reviews';
 import galleryRoutes from './routes/gallery';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
+import { getJwtSecret } from './middleware/auth';
 
 dotenv.config();
+
+// Fail closed before anything else: production must never start with a
+// publicly known JWT secret (see middleware/auth.ts).
+getJwtSecret();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;

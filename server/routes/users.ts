@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import User from '../models/User';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/', authenticate, async (req: any, res) => {
+// Every route here exposes user PII or account control — admin only. (No
+// customer-facing code calls /users; profile self-edit, if ever added, gets
+// its own whitelisted route so `role`/`isActive` can never be self-assigned.)
+router.get('/', authenticate, requireAdmin, async (req: any, res) => {
   try {
     const users = await User.find().select('-password').sort({ createdAt: -1 });
     res.json(users);
@@ -13,7 +16,7 @@ router.get('/', authenticate, async (req: any, res) => {
   }
 });
 
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
     if (!user) {
@@ -25,7 +28,7 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
-router.patch('/:id', authenticate, async (req: any, res) => {
+router.patch('/:id', authenticate, requireAdmin, async (req: any, res) => {
   try {
     const { role, isActive, name, email, phone, address, city, zipCode } = req.body;
     const update: any = {};
@@ -48,7 +51,7 @@ router.patch('/:id', authenticate, async (req: any, res) => {
   }
 });
 
-router.delete('/:id', authenticate, async (req: any, res) => {
+router.delete('/:id', authenticate, requireAdmin, async (req: any, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {

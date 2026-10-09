@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import GalleryPhoto from '../models/GalleryPhoto';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
+
+// Moderation (approve/feature/delete) is admin-only — anyone could otherwise
+// approve their own unapproved submission. Liking stays public for guests.
 
 router.post('/', authenticate, async (req: any, res) => {
   try {
@@ -55,7 +58,7 @@ router.get('/featured', async (_req, res) => {
   }
 });
 
-router.patch('/:id/approve', authenticate, async (req: any, res) => {
+router.patch('/:id/approve', authenticate, requireAdmin, async (req: any, res) => {
   try {
     const photo = await GalleryPhoto.findById(req.params.id);
     if (!photo) {
@@ -69,7 +72,7 @@ router.patch('/:id/approve', authenticate, async (req: any, res) => {
   }
 });
 
-router.patch('/:id/feature', authenticate, async (req: any, res) => {
+router.patch('/:id/feature', authenticate, requireAdmin, async (req: any, res) => {
   try {
     const photo = await GalleryPhoto.findById(req.params.id);
     if (!photo) {
@@ -97,7 +100,7 @@ router.patch('/:id/like', async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const photo = await GalleryPhoto.findByIdAndDelete(req.params.id);
     if (!photo) {

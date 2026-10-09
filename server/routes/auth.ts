@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
-import { authenticate } from '../middleware/auth';
+import { authenticate, getJwtSecret } from '../middleware/auth';
 
 const router = Router();
 
@@ -20,7 +20,7 @@ router.post('/register', async (req, res) => {
     }
     const user = new User({ name, email: email.toLowerCase(), password, role: 'customer' });
     await user.save();
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'defaultsecret', { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user._id }, getJwtSecret(), { expiresIn: '7d' });
     const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
@@ -49,7 +49,7 @@ router.post('/login', async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ error: 'Invalid email or password' });
     }
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'defaultsecret', { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user._id }, getJwtSecret(), { expiresIn: '7d' });
     const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
