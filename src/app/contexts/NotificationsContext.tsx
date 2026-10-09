@@ -16,16 +16,34 @@ interface NotificationsContextType {
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
+// The API returns raw Mongo documents (`_id`, ISO date strings). The bell
+// reads `id` and calls `.getTime()` on `createdAt`, so normalise once here —
+// unnormalised, mark-read hits `/notifications/undefined` and timeAgo throws.
+function normalizeNotification(raw: any): AppNotification {
+  const type = raw?.type;
+  return {
+    id: raw?._id || raw?.id || '',
+    title: raw?.title || '',
+    message: raw?.message || '',
+    type: type === 'order' || type === 'review' || type === 'promo' ? type : 'system',
+    read: !!raw?.read,
+    link: raw?.link || '',
+    createdAt: new Date(raw?.createdAt || Date.now()),
+    // user: null → shared broadcast (personal rows carry a user id)
+    broadcast: raw?.user === null,
+  };
+}
+
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, user } = useAuth();
 
   const fetchNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = (await notificationApi.getAll()) as AppNotification[];
-      setNotifications(Array.isArray(data) ? data : []);
+      const data = (await notificationApi.getAll()) as any[];
+      setNotifications((Array.isArray(data) ? data : []).map(normalizeNotification));
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
       setNotifications([]);
@@ -35,7 +53,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // /notifications requires a session cookie — skip it while signed out so
-  // anonymous visits don't log a 401 on every page load.
+  // anonymous visits don't log a 401 on every page load. While signed in,
+  // poll so admin status changes show up without a page refresh.
   useEffect(() => {
     if (isAuthLoading) return;
     if (!isAuthenticated) {
@@ -44,14 +63,19 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       return;
     }
     fetchNotifications();
-  }, [isAuthLoading, isAuthenticated, fetchNotifications]);
+    const timer = window.setInterval(fetchNotifications, 30000);
+    return () => window.clearInterval(timer);
+    // user?.id so switching accounts mid-session refetches too (login over an
+    // existing session never flips isAuthenticated, which would keep the old
+    // user's bell).
+  }, [isAuthLoading, isAuthenticated, user?.id, fetchNotifications]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const addNotification = async (data: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
     try {
-      const res = (await notificationApi.create(data)) as AppNotification;
-      setNotifications(prev => [res, ...prev]);
+      const res = (await notificationApi.create(data)) as any;
+      setNotifications(prev => [normalizeNotification(res), ...prev]);
     } catch (err) {
       console.error('Add notification failed:', err);
     }

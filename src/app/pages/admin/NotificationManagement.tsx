@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Mail, Send, Plus, Edit2, Trash2, Clock, Check, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Send, Plus, Edit2, Trash2, Clock, Check, X, Loader2, Megaphone } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { NotificationTemplate, NotificationLog } from '../../types';
+import { notificationApi } from '../../api/client';
 
 const INITIAL_TEMPLATES: NotificationTemplate[] = [
   { id: 't1', name: 'Order Confirmed', trigger: 'order.created', subject: 'Your order has been placed! 🌸', body: 'Hi {{customerName}}, your order #{{orderId}} has been received. Total: {{total}}. We\'ll notify you once payment is verified.', active: true },
@@ -11,14 +12,6 @@ const INITIAL_TEMPLATES: NotificationTemplate[] = [
   { id: 't3', name: 'Out for Delivery', trigger: 'order.to-receive', subject: 'Your bouquet is on its way! 🚚', body: 'Hi {{customerName}}, your order #{{orderId}} has been dispatched and is out for delivery. Estimated arrival: {{estimatedDelivery}}.', active: true },
   { id: 't4', name: 'Delivered — Rate Us', trigger: 'order.to-rate', subject: 'Your flowers have arrived! Leave a review 🌹', body: 'Hi {{customerName}}, we hope you\'re loving your bouquet! Share your experience and help others find their perfect flowers.', active: true },
   { id: 't5', name: 'Order Cancelled', trigger: 'order.cancelled', subject: 'Order Cancellation Confirmation', body: 'Hi {{customerName}}, your order #{{orderId}} has been cancelled. If you paid via e-wallet or bank transfer, a refund will be processed within 3–5 business days.', active: false },
-];
-
-const INITIAL_LOGS: NotificationLog[] = [
-  { id: 'l1', templateId: 't1', subject: 'Your order has been placed! 🌸', recipient: 'jane@example.com', sentAt: new Date(Date.now() - 2 * 60 * 60 * 1000), status: 'sent', type: 'auto' },
-  { id: 'l2', templateId: 't2', subject: 'Payment confirmed — preparing your bouquet! 💐', recipient: 'john@example.com', sentAt: new Date(Date.now() - 4 * 60 * 60 * 1000), status: 'sent', type: 'auto' },
-  { id: 'l3', templateId: 't3', subject: 'Your bouquet is on its way! 🚚', recipient: 'emily@example.com', sentAt: new Date(Date.now() - 6 * 60 * 60 * 1000), status: 'sent', type: 'auto' },
-  { id: 'l4', subject: 'Special Weekend Promo: 20% Off All Bouquets!', recipient: 'all_customers', sentAt: new Date(Date.now() - 24 * 60 * 60 * 1000), status: 'sent', type: 'manual' },
-  { id: 'l5', subject: "Mother's Day Pre-Order Now Open", recipient: 'all_customers', sentAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), status: 'sent', type: 'manual' },
 ];
 
 const EMPTY_TEMPLATE: Omit<NotificationTemplate, 'id'> = { name: '', trigger: 'order.created', subject: '', body: '', active: true };
@@ -57,9 +50,9 @@ function TemplateForm({
         </div>
         <div>
           <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">
-            Body <span className="text-gray-400 font-normal">— variables: {'{{customerName}}, {{orderId}}, {{total}}'}</span>
+            Body <span className="text-gray-400 font-normal">— sent as written; edit before sending</span>
           </label>
-          <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={3} className="w-full border border-pink-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-rose-400" placeholder="Email body..." />
+          <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={3} className="w-full border border-pink-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-rose-400" placeholder="Notification body..." />
         </div>
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -80,14 +73,38 @@ function TemplateForm({
 
 export function NotificationManagement() {
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES);
-  const [logs, setLogs] = useState(INITIAL_LOGS);
+  const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [activeSection, setActiveSection] = useState<'templates' | 'manual' | 'history'>('templates');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addingAtTop, setAddingAtTop] = useState(false);
   const [form, setForm] = useState<Omit<NotificationTemplate, 'id'>>(EMPTY_TEMPLATE);
-  const [manualForm, setManualForm] = useState({ recipient: '', subject: '', body: '' });
+  const [manualForm, setManualForm] = useState({ subject: '', body: '' });
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Real send history from the API: event-driven notifications (Auto) and
+  // admin broadcasts (Manual). This used to be hardcoded mock rows.
+  const loadHistory = async () => {
+    try {
+      const data = await notificationApi.getAll() as any[];
+      const rows: NotificationLog[] = (Array.isArray(data) ? data : []).map(n => ({
+        id: n._id || n.id || Math.random().toString(36).slice(2),
+        subject: n.title,
+        recipient: n.user ? 'customer' : 'all_customers',
+        sentAt: new Date(n.createdAt || Date.now()),
+        status: 'sent',
+        type: n.user ? 'auto' : 'manual',
+      }));
+      setLogs(rows);
+    } catch (err) {
+      console.error('Failed to load notification history:', err);
+      setLogs([]);
+    }
+  };
+
+  useEffect(() => { loadHistory(); }, []);
 
   const startAdd = () => { setAddingAtTop(true); setEditingId(null); setForm(EMPTY_TEMPLATE); };
   const startEdit = (t: NotificationTemplate) => {
@@ -110,31 +127,54 @@ export function NotificationManagement() {
   const toggleTemplate = (id: string) => setTemplates(prev => prev.map(t => t.id === id ? { ...t, active: !t.active } : t));
   const deleteTemplate = (id: string) => { setTemplates(prev => prev.filter(t => t.id !== id)); setDeleteId(null); };
 
-  const sendManual = () => {
-    if (!manualForm.recipient || !manualForm.subject || !manualForm.body) return;
-    setLogs(prev => [{ id: `l-${Date.now()}`, subject: manualForm.subject, recipient: manualForm.recipient, sentAt: new Date(), status: 'sent', type: 'manual' }, ...prev]);
-    setSendSuccess(true);
-    setManualForm({ recipient: '', subject: '', body: '' });
-    setTimeout(() => setSendSuccess(false), 3000);
+  /** Load a template's copy into the announcement composer. */
+  const useTemplate = (t: NotificationTemplate) => {
+    setManualForm({ subject: t.subject, body: t.body });
+    setActiveSection('manual');
+  };
+
+  // Broadcast to every customer's bell — this used to only fake a success
+  // banner without ever calling the API.
+  const sendManual = async () => {
+    if (!manualForm.subject || !manualForm.body || sending) return;
+    setSending(true);
+    setSendError('');
+    try {
+      await notificationApi.create({
+        title: manualForm.subject,
+        message: manualForm.body,
+        type: 'promo',
+        broadcast: true,
+      });
+      setManualForm({ subject: '', body: '' });
+      setSendSuccess(true);
+      await loadHistory();
+      setTimeout(() => setSendSuccess(false), 3000);
+    } catch (err) {
+      console.error('Broadcast failed:', err);
+      setSendError('Could not send the announcement. Please try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Notification Management</h1>
-        <p className="text-gray-500 text-sm">{templates.filter(t => t.active).length} active templates • {logs.length} sent</p>
+        <p className="text-gray-500 text-sm">{templates.filter(t => t.active).length} active presets • {logs.length} notifications logged</p>
       </div>
 
       {/* How it works */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-2xl p-4">
         <p className="text-sm text-blue-800">
-          <strong>📧 How email notifications work:</strong> Templates are triggered automatically when an order's status changes (e.g., <code className="bg-blue-100 px-1 rounded">order.to-ship</code> fires when admin confirms payment). The system substitutes <code className="bg-blue-100 px-1 rounded">{'{{variables}}'}</code> with real order data and sends the email to the customer. Use the Manual Send tab for announcements and promos.
+          <strong>🔔 How notifications work:</strong> Order events fire automatically — placing an order pushes <em>Order placed 🌸</em> to the customer and <em>New order received 🛍️</em> to the admin bar, and status changes (payment confirmed, out for delivery, delivered, cancelled) push updates to the customer's bell. Templates here are presets for the <strong>Send Announcement</strong> tab, which broadcasts to every customer. Notifications are in-app only — no emails are sent.
         </p>
       </div>
 
       {/* Section tabs */}
       <div className="flex gap-2 border-b border-pink-100">
-        {([['templates', 'Email Templates'], ['manual', 'Send Manual'], ['history', 'Send History']] as const).map(([key, label]) => (
+        {([['templates', 'Message Presets'], ['manual', 'Send Announcement'], ['history', 'Send History']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setActiveSection(key)} className={`px-4 py-2.5 rounded-t-xl text-sm font-semibold border-b-2 transition-colors ${activeSection === key ? 'border-rose-500 text-rose-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {label}
           </button>
@@ -170,6 +210,9 @@ export function NotificationManagement() {
                     <p className="text-xs text-gray-400 line-clamp-2">{t.body}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => useTemplate(t)} title="Use in announcement" className="p-1.5 rounded-lg text-gray-400 hover:bg-purple-50 hover:text-purple-600">
+                      <Send className="w-4 h-4" />
+                    </button>
                     <button onClick={() => toggleTemplate(t.id)} className={`p-1.5 rounded-lg transition-colors ${t.active ? 'text-green-500 hover:text-gray-400' : 'text-gray-300 hover:text-green-500'}`}>
                       {t.active ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
                     </button>
@@ -202,27 +245,39 @@ export function NotificationManagement() {
       {/* Manual Send */}
       {activeSection === 'manual' && (
         <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-6 max-w-2xl">
-          <h3 className="font-bold text-gray-800 mb-5 flex items-center gap-2"><Mail className="w-4 h-4 text-rose-500" /> Compose Manual Email</h3>
+          <h3 className="font-bold text-gray-800 mb-5 flex items-center gap-2"><Megaphone className="w-4 h-4 text-purple-500" /> Compose Announcement</h3>
           {sendSuccess && (
             <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-2xl text-green-700 text-sm flex items-center gap-2">
-              <Check className="w-4 h-4" /> Email sent successfully!
+              <Check className="w-4 h-4" /> Announcement sent to every customer's bell!
+            </div>
+          )}
+          {sendError && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm flex items-center gap-2">
+              <X className="w-4 h-4" /> {sendError}
             </div>
           )}
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Recipient</label>
-              <Input value={manualForm.recipient} onChange={e => setManualForm(f => ({ ...f, recipient: e.target.value }))} placeholder="email@example.com or 'all_customers'" className="border-pink-200" />
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Audience</label>
+              <div className="w-full border border-pink-100 bg-rose-50/50 rounded-xl px-3 py-2.5 text-sm text-gray-600 flex items-center gap-2">
+                <Megaphone className="w-4 h-4 text-purple-500" /> All customers — lands in every signed-in shopper's bell
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Subject</label>
-              <Input value={manualForm.subject} onChange={e => setManualForm(f => ({ ...f, subject: e.target.value }))} placeholder="Email subject..." className="border-pink-200" />
+              <Input value={manualForm.subject} onChange={e => setManualForm(f => ({ ...f, subject: e.target.value }))} placeholder="e.g. Weekend special: 20% off all bouquets!" className="border-pink-200" />
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Message</label>
               <textarea value={manualForm.body} onChange={e => setManualForm(f => ({ ...f, body: e.target.value }))} rows={5} className="w-full border border-pink-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-rose-400" placeholder="Type your message here..." />
             </div>
-            <Button onClick={sendManual} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white w-full">
-              <Send className="w-4 h-4 mr-2" /> Send Email
+            <Button
+              onClick={sendManual}
+              disabled={sending || !manualForm.subject || !manualForm.body}
+              className="bg-gradient-to-r from-rose-500 to-purple-500 text-white w-full"
+            >
+              {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+              {sending ? 'Sending…' : 'Send Announcement'}
             </Button>
           </div>
         </div>

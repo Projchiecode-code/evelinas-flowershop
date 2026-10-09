@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import Order from '../models/Order';
 import Bouquet from '../models/Bouquet';
+import Notification from '../models/Notification';
+import User from '../models/User';
 import { authenticate } from '../middleware/auth';
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -22,6 +24,19 @@ const STATUS_LOCATIONS: Record<string, string> = {
 };
 
 const router = Router();
+
+/**
+ * Push an in-app notification to a user's bell. `user: null` broadcasts to
+ * the shop owner (admins see every notification). A failed notification must
+ * never take down the order flow it accompanies.
+ */
+async function notify(userId: string | null, title: string, message: string, link = '') {
+  try {
+    await Notification.create({ user: userId, title, message, type: 'order', link });
+  } catch (err) {
+    console.error('Failed to create notification:', err);
+  }
+}
 
 router.post('/', authenticate, async (req: any, res) => {
   try {
@@ -75,6 +90,27 @@ router.post('/', authenticate, async (req: any, res) => {
 
     await order.save();
     const populated = await order.populate('items.bouquet');
+
+    // Announce the order: confirmation for the customer, an alert for each
+    // shop owner. Admin alerts are targeted at admin accounts — broadcasting
+    // them (user: null) would leak internal alerts into customer bells.
+    const itemCount = populatedItems.reduce((sum, item) => sum + item.quantity, 0);
+    await notify(
+      req.userId,
+      'Order placed 🌸',
+      `We've received your order ${orderId} — $${Number(total).toFixed(2)}. We'll notify you as it moves along.`,
+      `/order-confirmation/${orderId}`
+    );
+    const admins = await User.find({ role: 'admin' }).select('_id');
+    await Promise.all(admins.map(admin =>
+      notify(
+        String(admin._id),
+        'New order received 🛍️',
+        `${customerName} placed order ${orderId} — $${Number(total).toFixed(2)} (${itemCount} item${itemCount === 1 ? '' : 's'}).`,
+        '/admin/orders'
+      )
+    ));
+
     res.status(201).json(populated);
   } catch (err: any) {
     console.error('Create order error:', err);
@@ -112,11 +148,18 @@ router.get('/:id', authenticate, async (req: any, res) => {
 
 router.patch('/:id/status', authenticate, async (req: any, res) => {
   try {
+    // Only the shop owner moves orders through the pipeline — without this
+    // any signed-in customer could cancel someone else's order.
+    if (req.userRole !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { status } = req.body;
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+    const previousStatus = order.status;
     order.status = status;
     order.trackingUpdates.push({
       status,
@@ -129,6 +172,23 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
       order.ratingComment = req.body.comment;
     }
     await order.save();
+
+    // Tell the customer how their order is moving — only on real changes,
+    // and only for transitions they didn't trigger themselves (rating).
+    if (order.customer && previousStatus !== status) {
+      const id = String(order._id);
+      const NOTIFY: Record<string, { title: string; text: string } | null> = {
+        'to-pay': null, // initial state — already covered by "Order placed"
+        'to-ship': { title: 'Payment confirmed 🌿', text: `Good news — your order ${id} is being prepared by our florists.` },
+        'to-receive': { title: 'On the way 🚚', text: `Your order ${id} is out for delivery. Get your door ready!` },
+        'to-rate': { title: 'Delivered 🎉', text: `Your order ${id} was delivered — we'd love to hear how it went. Rate your experience from your order history.` },
+        'rated': null,
+        'cancelled': { title: 'Order cancelled', text: `Your order ${id} was cancelled. Need a hand? Contact us and we'll sort it out.` },
+      };
+      const note = NOTIFY[status];
+      if (note) await notify(order.customer.toString(), note.title, note.text, `/track?orderId=${id}`);
+    }
+
     const populated = await order.populate('items.bouquet');
     res.json(populated);
   } catch (err: any) {

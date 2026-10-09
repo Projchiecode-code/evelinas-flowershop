@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Bell, X, ShoppingBag, Star, Megaphone, Settings, CheckCheck } from 'lucide-react';
 import { Link } from 'react-router';
 import { useNotifications } from '../contexts/NotificationsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { AppNotification } from '../types';
 
 const TYPE_CONFIG: Record<AppNotification['type'], { icon: React.ReactNode; color: string }> = {
@@ -23,6 +24,7 @@ function timeAgo(date: Date): string {
 
 export function NotificationBell() {
   const { notifications, unreadCount, markRead, markAllRead, clearNotification } = useNotifications();
+  const { isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
 
   const handleClick = (n: AppNotification) => {
@@ -94,9 +96,13 @@ export function NotificationBell() {
                       </div>
                       <div className="flex flex-col items-center gap-1 shrink-0">
                         {!n.read && <span className="w-2 h-2 bg-rose-500 rounded-full" />}
-                        <button onClick={() => clearNotification(n.id)} className="text-gray-200 hover:text-gray-400 p-0.5">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Broadcasts are shared — customers can't delete them
+                            (clicking marks them read); admins can clean up. */}
+                        {(!n.broadcast || isAdmin) && (
+                          <button onClick={() => clearNotification(n.id)} className="text-gray-200 hover:text-gray-400 p-0.5">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

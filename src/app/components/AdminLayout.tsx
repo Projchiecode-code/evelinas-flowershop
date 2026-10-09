@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation, Navigate } from 'react-router';
 import { LayoutDashboard, Package, ShoppingBag, LogOut, Flower2, ChevronRight, Zap, MessageSquare, Camera, Bell, BarChart3, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { NotificationBell } from './NotificationBell';
 
 const NAV = [
   { to: '/admin', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" />, exact: true },
@@ -73,7 +74,10 @@ function NavItem({ item }: { item: typeof NAV[number] }) {
 }
 
 export function AdminLayout() {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, isLoading, logout } = useAuth();
+  // Wait for /auth/me before judging the role — otherwise refreshing /admin
+  // bounces a signed-in owner to the login page (user is null mid-load).
+  if (isLoading) return null;
   if (!isAdmin) return <Navigate to="/login" replace />;
 
   return (
@@ -112,8 +116,15 @@ export function AdminLayout() {
         </div>
       </aside>
 
-      <main className="ml-60 flex-1 p-8 min-h-screen">
-        <Outlet />
+      <main className="ml-60 flex-1 min-h-screen">
+        {/* Activity bar — the shop owner sees new orders and status traffic here */}
+        <div className="flex items-center justify-between px-8 py-4 bg-white/70 backdrop-blur border-b border-pink-100">
+          <p className="text-sm text-gray-500">Live shop activity</p>
+          <NotificationBell />
+        </div>
+        <div className="p-8">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

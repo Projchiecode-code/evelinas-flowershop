@@ -121,5 +121,7 @@ export interface AppNotification {
     read: boolean;
     createdAt: Date;
     link?: string;
+    /** Shared shop-wide announcement (user: null) rather than a personal row. */
+    broadcast?: boolean;
 }
 //# sourceMappingURL=types.d.ts.map

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CreditCard, Package, Truck, Star, CheckCircle, Clock, MapPin, AlertTriangle, ImageIcon } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -289,6 +289,19 @@ function OrderCard({ order, tab }: { order: Order; tab: Tab }) {
 export function OrderTracking() {
   const { orders } = useOrders();
   const [activeTab, setActiveTab] = useState<Tab>('to-pay');
+
+  // ?orderId=... (from a notification or the confirmation page) should open
+  // the tab that actually holds that order instead of defaulting to To Pay.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get('orderId');
+    if (!wanted) return;
+    const order = orders.find(o => o.id === wanted || (o as any)._id === wanted);
+    if (!order) return;
+    const status = order.status === 'rated' ? 'to-rate' : order.status;
+    if (status === 'to-pay' || status === 'to-ship' || status === 'to-receive' || status === 'to-rate') {
+      setActiveTab(status);
+    }
+  }, [orders]);
 
   const tabOrders = orders.filter(o => {
     if (activeTab === 'to-rate') return o.status === 'to-rate' || o.status === 'rated';
