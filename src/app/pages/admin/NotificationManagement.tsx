@@ -83,6 +83,7 @@ export function NotificationManagement() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
 
   // Real send history from the API: event-driven notifications (Auto) and
   // admin broadcasts (Manual). This used to be hardcoded mock rows.
@@ -105,6 +106,19 @@ export function NotificationManagement() {
   };
 
   useEffect(() => { loadHistory(); }, []);
+
+  // Remove a notification from history — same record every bell shows, so it
+  // disappears for customers too (admins are allowed to delete any row).
+  const removeLog = async (id: string) => {
+    try {
+      await notificationApi.delete(id);
+      setLogs(prev => prev.filter(l => l.id !== id));
+    } catch (err) {
+      console.error('Delete notification failed:', err);
+    } finally {
+      setDeleteLogId(null);
+    }
+  };
 
   const startAdd = () => { setAddingAtTop(true); setEditingId(null); setForm(EMPTY_TEMPLATE); };
   const startEdit = (t: NotificationTemplate) => {
@@ -295,6 +309,7 @@ export function NotificationManagement() {
                   <th className="text-left p-4 text-gray-600 font-semibold hidden sm:table-cell">Sent At</th>
                   <th className="text-center p-4 text-gray-600 font-semibold">Type</th>
                   <th className="text-center p-4 text-gray-600 font-semibold">Status</th>
+                  <th className="text-right p-4 text-gray-600 font-semibold">Remove</th>
                 </tr>
               </thead>
               <tbody>
@@ -315,8 +330,30 @@ export function NotificationManagement() {
                         {log.status}
                       </Badge>
                     </td>
+                    <td className="p-4 text-right">
+                      {deleteLogId === log.id ? (
+                        <div className="flex gap-1 justify-end">
+                          <button onClick={() => removeLog(log.id)} className="px-2 py-1 bg-red-500 text-white rounded-lg text-xs font-bold">Remove</button>
+                          <button onClick={() => setDeleteLogId(null)} className="px-2 py-1 bg-gray-100 text-gray-500 rounded-lg text-xs">Keep</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeleteLogId(log.id)}
+                          title="Remove notification"
+                          aria-label={`Remove notification: ${log.subject}`}
+                          className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
+                {logs.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-gray-400 text-sm">Nothing here yet — notifications will appear as orders go out and announcements are sent.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

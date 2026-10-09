@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation, Navigate } from 'react-router';
-import { LayoutDashboard, Package, ShoppingBag, LogOut, Flower2, ChevronRight, Zap, MessageSquare, Camera, Bell, BarChart3, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { LayoutDashboard, Package, ShoppingBag, LogOut, Flower2, ChevronRight, Zap, MessageSquare, Camera, Bell, BarChart3, ChevronDown, Menu } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { NotificationBell } from './NotificationBell';
 
@@ -75,6 +75,11 @@ function NavItem({ item }: { item: typeof NAV[number] }) {
 
 export function AdminLayout() {
   const { user, isAdmin, isLoading, logout } = useAuth();
+  const location = useLocation();
+  // Off-canvas sidebar on phones: the fixed 240px rail used to overlap the
+  // content (ml-60 on a 390px screen left ~150px of usable width).
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
   // Wait for /auth/me before judging the role — otherwise refreshing /admin
   // bounces a signed-in owner to the login page (user is null mid-load).
   if (isLoading) return null;
@@ -82,8 +87,15 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-rose-50 flex">
-      {/* Sidebar */}
-      <aside className="w-60 bg-gradient-to-b from-rose-600 via-pink-600 to-purple-700 text-white flex flex-col fixed h-full z-20 shadow-xl">
+      {/* Scrim behind the drawer (mobile only) */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar — drawer below md, fixed rail from md up */}
+      <aside
+        className={`fixed inset-y-0 left-0 w-60 bg-gradient-to-b from-rose-600 via-pink-600 to-purple-700 text-white flex flex-col z-40 shadow-xl transition-transform duration-200 md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
         <div className="p-5 border-b border-white/10">
           <Link to="/" className="flex items-center gap-3 group">
             <div className="bg-white/20 rounded-xl p-2 group-hover:bg-white/30 transition-colors">
@@ -116,13 +128,24 @@ export function AdminLayout() {
         </div>
       </aside>
 
-      <main className="ml-60 flex-1 min-h-screen">
+      {/* min-w-0: without it main's auto min-width (charts/grids inside)
+          inflates the flex item past the phone viewport → page-wide scroll */}
+      <main className="flex-1 min-w-0 min-h-screen md:ml-60">
         {/* Activity bar — the shop owner sees new orders and status traffic here */}
-        <div className="flex items-center justify-between px-8 py-4 bg-white/70 backdrop-blur border-b border-pink-100">
-          <p className="text-sm text-gray-500">Live shop activity</p>
+        <div className="flex items-center justify-between gap-3 px-4 md:px-8 py-4 bg-white/70 backdrop-blur border-b border-pink-100">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-2 -ml-2 rounded-lg text-gray-500 hover:bg-rose-50 hover:text-rose-600"
+              aria-label="Open admin menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <p className="text-sm text-gray-500 truncate">Live shop activity</p>
+          </div>
           <NotificationBell />
         </div>
-        <div className="p-8">
+        <div className="p-4 md:p-8">
           <Outlet />
         </div>
       </main>

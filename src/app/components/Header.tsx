@@ -64,7 +64,8 @@ export function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            <div className="hidden sm:block"><NotificationBell /></div>
+            {/* Bell stays visible on phones — notifications must be reachable */}
+            <NotificationBell />
             <Link to="/favorites" className="relative hidden sm:block">
               <Button size="sm" variant="outline" className="border-pink-200 text-rose-500 hover:bg-rose-50">
                 <Heart className={`w-4 h-4 ${favorites.length > 0 ? 'fill-rose-400 text-rose-500' : ''}`} />
@@ -181,6 +182,10 @@ export function Header() {
                 {n.label}
               </Link>
             ))}
+            {/* Favorites lives in the menu too — its header button is sm+ only */}
+            <Link to="/favorites" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-rose-50 hover:text-rose-600 transition-colors">
+              <Heart className="w-4 h-4" /> Favorites
+            </Link>
             {!isAuthenticated && (
               <div className="flex gap-2 pt-2">
                 <Link to="/login" onClick={() => setMenuOpen(false)} className="flex-1">
