@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { GalleryPhoto, GalleryComment } from '../types';
+import { galleryApi } from '../api/client';
 import { mockGallery } from '../data/gallery';
 
 const INITIAL_COMMENTS: GalleryComment[] = [
@@ -15,42 +16,94 @@ const INITIAL_COMMENTS: GalleryComment[] = [
 interface GalleryContextType {
   photos: GalleryPhoto[];
   comments: GalleryComment[];
-  submitPhoto: (photo: Omit<GalleryPhoto, 'id' | 'createdAt' | 'approved' | 'featured' | 'likes'>) => void;
-  approvePhoto: (id: string) => void;
-  deletePhoto: (id: string) => void;
-  featurePhoto: (id: string, featured: boolean) => void;
-  likePhoto: (id: string) => void;
-  addComment: (photoId: string, authorName: string, text: string) => void;
-  deleteComment: (id: string) => void;
-  approveComment: (id: string) => void;
+  isLoading: boolean;
+  submitPhoto: (photo: Omit<GalleryPhoto, 'id' | 'createdAt' | 'approved' | 'featured' | 'likes'>) => Promise<void>;
+  approvePhoto: (id: string) => Promise<void>;
+  deletePhoto: (id: string) => Promise<void>;
+  featurePhoto: (id: string, featured: boolean) => Promise<void>;
+  likePhoto: (id: string) => Promise<void>;
+  addComment: (photoId: string, authorName: string, text: string) => Promise<void>;
+  deleteComment: (id: string) => Promise<void>;
+  approveComment: (id: string) => Promise<void>;
   getCommentsForPhoto: (photoId: string) => GalleryComment[];
   getAllComments: () => GalleryComment[];
   getApprovedPhotos: () => GalleryPhoto[];
   getFeaturedPhotos: () => GalleryPhoto[];
+  refetch: () => Promise<void>;
 }
 
 const GalleryContext = createContext<GalleryContextType | undefined>(undefined);
 
 export function GalleryProvider({ children }: { children: ReactNode }) {
-  const [photos, setPhotos] = useState<GalleryPhoto[]>(mockGallery);
+  const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [comments, setComments] = useState<GalleryComment[]>(INITIAL_COMMENTS);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const submitPhoto = (data: Omit<GalleryPhoto, 'id' | 'createdAt' | 'approved' | 'featured' | 'likes'>) => {
-    setPhotos(prev => [{ ...data, id: `g-${Date.now()}`, createdAt: new Date(), approved: false, featured: false, likes: 0 }, ...prev]);
+  const fetchGallery = async () => {
+    try {
+      setIsLoading(true);
+      const apiPhotos = await galleryApi.getAll();
+      // Combine mock gallery with API photos (API photos first for newest)
+      const combinedPhotos = [...apiPhotos, ...mockGallery];
+      setPhotos(combinedPhotos);
+    } catch (err) {
+      console.error('Failed to fetch gallery:', err);
+      setPhotos(mockGallery);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const approvePhoto = (id: string) =>
-    setPhotos(prev => prev.map(p => p.id === id ? { ...p, approved: !p.approved } : p));
+  useEffect(() => {
+    fetchGallery();
+  }, []);
 
-  const deletePhoto = (id: string) => setPhotos(prev => prev.filter(p => p.id !== id));
+  const submitPhoto = async (data: Omit<GalleryPhoto, 'id' | 'createdAt' | 'approved' | 'featured' | 'likes'>) => {
+    try {
+      const res = await galleryApi.submit(data);
+      setPhotos(prev => [res, ...prev]);
+    } catch (err) {
+      console.error('Submit photo failed:', err);
+    }
+  };
 
-  const featurePhoto = (id: string, featured: boolean) =>
-    setPhotos(prev => prev.map(p => p.id === id ? { ...p, featured } : p));
+  const approvePhoto = async (id: string) => {
+    try {
+      const res = await galleryApi.approve(id);
+      setPhotos(prev => prev.map(p => p.id === id ? res : p));
+    } catch (err) {
+      console.error('Approve photo failed:', err);
+    }
+  };
 
-  const likePhoto = (id: string) =>
-    setPhotos(prev => prev.map(p => p.id === id ? { ...p, likes: p.likes + 1 } : p));
+  const deletePhoto = async (id: string) => {
+    try {
+      await galleryApi.delete(id);
+      setPhotos(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error('Delete photo failed:', err);
+    }
+  };
 
-  const addComment = (photoId: string, authorName: string, text: string) => {
+  const featurePhoto = async (id: string, featured: boolean) => {
+    try {
+      const res = await galleryApi.feature(id);
+      setPhotos(prev => prev.map(p => p.id === id ? res : p));
+    } catch (err) {
+      console.error('Feature photo failed:', err);
+    }
+  };
+
+  const likePhoto = async (id: string) => {
+    try {
+      const res = await galleryApi.like(id);
+      setPhotos(prev => prev.map(p => p.id === id ? res : p));
+    } catch (err) {
+      console.error('Like photo failed:', err);
+    }
+  };
+
+  const addComment = async (photoId: string, authorName: string, text: string) => {
     const newComment: GalleryComment = {
       id: `c-${Date.now()}`, photoId, authorName: authorName.trim() || 'Anonymous',
       text, createdAt: new Date(), approved: true,
@@ -58,10 +111,13 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
     setComments(prev => [...prev, newComment]);
   };
 
-  const deleteComment = (id: string) => setComments(prev => prev.filter(c => c.id !== id));
+  const deleteComment = async (id: string) => {
+    setComments(prev => prev.filter(c => c.id !== id));
+  };
 
-  const approveComment = (id: string) =>
+  const approveComment = async (id: string) => {
     setComments(prev => prev.map(c => c.id === id ? { ...c, approved: !c.approved } : c));
+  };
 
   const getCommentsForPhoto = (photoId: string) =>
     comments.filter(c => c.photoId === photoId && c.approved);
@@ -69,10 +125,15 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const getAllComments = () => comments;
 
   const getApprovedPhotos = () => photos.filter(p => p.approved);
+
   const getFeaturedPhotos = () => photos.filter(p => p.approved && p.featured);
 
+  const refetch = async () => {
+    await fetchGallery();
+  };
+
   return (
-    <GalleryContext.Provider value={{ photos, comments, submitPhoto, approvePhoto, deletePhoto, featurePhoto, likePhoto, addComment, deleteComment, approveComment, getCommentsForPhoto, getAllComments, getApprovedPhotos, getFeaturedPhotos }}>
+    <GalleryContext.Provider value={{ photos, comments, isLoading, submitPhoto, approvePhoto, deletePhoto, featurePhoto, likePhoto, addComment, deleteComment, approveComment, getCommentsForPhoto, getAllComments, getApprovedPhotos, getFeaturedPhotos, refetch }}>
       {children}
     </GalleryContext.Provider>
   );

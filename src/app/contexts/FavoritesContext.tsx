@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Bouquet } from '../types';
 
 interface FavoritesContextType {
   favorites: Bouquet[];
+  isLoading: boolean;
   addFavorite: (bouquet: Bouquet) => void;
   removeFavorite: (bouquetId: string) => void;
   isFavorite: (bouquetId: string) => boolean;
@@ -10,9 +11,29 @@ interface FavoritesContextType {
 }
 
 const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
+const FAVORITES_STORAGE_KEY = 'evelinas_favorites';
 
 export function FavoritesProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<Bouquet[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
+    if (saved) {
+      try {
+        setFavorites(JSON.parse(saved));
+      } catch {
+        setFavorites([]);
+      }
+    }
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading) {
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
+    }
+  }, [favorites, isLoading]);
 
   const addFavorite = (bouquet: Bouquet) => {
     setFavorites(prev => prev.some(b => b.id === bouquet.id) ? prev : [...prev, bouquet]);
@@ -29,7 +50,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <FavoritesContext.Provider value={{ favorites, addFavorite, removeFavorite, isFavorite, toggleFavorite }}>
+    <FavoritesContext.Provider value={{ favorites, isLoading, addFavorite, removeFavorite, isFavorite, toggleFavorite }}>
       {children}
     </FavoritesContext.Provider>
   );

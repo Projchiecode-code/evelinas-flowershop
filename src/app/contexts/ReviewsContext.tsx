@@ -1,43 +1,92 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Review } from '../types';
+import { reviewApi } from '../api/client';
 import { mockReviews } from '../data/reviews';
 
 interface ReviewsContextType {
   reviews: Review[];
-  addReview: (review: Omit<Review, 'id' | 'createdAt' | 'approved'>) => void;
-  approveReview: (id: string) => void;
-  deleteReview: (id: string) => void;
-  featureReview: (id: string, featured: boolean) => void;
+  isLoading: boolean;
+  addReview: (review: Omit<Review, 'id' | 'createdAt' | 'approved'>) => Promise<void>;
+  approveReview: (id: string) => Promise<void>;
+  deleteReview: (id: string) => Promise<void>;
+  featureReview: (id: string, featured: boolean) => Promise<void>;
   getReviewsForBouquet: (bouquetId: string) => Review[];
   getApprovedReviews: () => Review[];
+  refetch: () => Promise<void>;
 }
 
 const ReviewsContext = createContext<ReviewsContextType | undefined>(undefined);
 
 export function ReviewsProvider({ children }: { children: ReactNode }) {
-  const [reviews, setReviews] = useState<Review[]>(mockReviews);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const addReview = (data: Omit<Review, 'id' | 'createdAt' | 'approved'>) => {
-    const newReview: Review = { ...data, id: `r-${Date.now()}`, createdAt: new Date(), approved: false };
-    setReviews(prev => [newReview, ...prev]);
+  const fetchReviews = async () => {
+    try {
+      setIsLoading(true);
+      const apiReviews = await reviewApi.getAll();
+      // Combine API reviews with mock reviews
+      const combinedReviews = [...apiReviews, ...mockReviews];
+      setReviews(combinedReviews);
+    } catch (err) {
+      console.error('Failed to fetch reviews:', err);
+      setReviews(mockReviews);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const approveReview = (id: string) =>
-    setReviews(prev => prev.map(r => r.id === id ? { ...r, approved: !r.approved } : r));
+  useEffect(() => {
+    fetchReviews();
+  }, []);
 
-  const deleteReview = (id: string) =>
-    setReviews(prev => prev.filter(r => r.id !== id));
+  const addReview = async (data: Omit<Review, 'id' | 'createdAt' | 'approved'>) => {
+    try {
+      const res = await reviewApi.create(data);
+      setReviews(prev => [res, ...prev]);
+    } catch (err) {
+      console.error('Add review failed:', err);
+    }
+  };
 
-  const featureReview = (id: string, featured: boolean) =>
-    setReviews(prev => prev.map(r => r.id === id ? { ...r, featured } : r));
+  const approveReview = async (id: string) => {
+    try {
+      const res = await reviewApi.approve(id);
+      setReviews(prev => prev.map(r => r.id === id ? res : r));
+    } catch (err) {
+      console.error('Approve review failed:', err);
+    }
+  };
+
+  const deleteReview = async (id: string) => {
+    try {
+      await reviewApi.delete(id);
+      setReviews(prev => prev.filter(r => r.id !== id));
+    } catch (err) {
+      console.error('Delete review failed:', err);
+    }
+  };
+
+  const featureReview = async (id: string, featured: boolean) => {
+    try {
+      const res = await reviewApi.feature(id);
+      setReviews(prev => prev.map(r => r.id === id ? res : r));
+    } catch (err) {
+      console.error('Feature review failed:', err);
+    }
+  };
 
   const getReviewsForBouquet = (bouquetId: string) =>
     reviews.filter(r => r.bouquetId === bouquetId && r.approved);
 
   const getApprovedReviews = () => reviews.filter(r => r.approved);
 
+  const refetch = async () => {
+    await fetchReviews();
+  };
+
   return (
-    <ReviewsContext.Provider value={{ reviews, addReview, approveReview, deleteReview, featureReview, getReviewsForBouquet, getApprovedReviews }}>
+    <ReviewsContext.Provider value={{ reviews, isLoading, addReview, approveReview, deleteReview, featureReview, getReviewsForBouquet, getApprovedReviews, refetch }}>
       {children}
     </ReviewsContext.Provider>
   );
