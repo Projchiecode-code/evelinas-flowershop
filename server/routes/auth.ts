@@ -21,10 +21,11 @@ router.post('/register', async (req, res) => {
     const user = new User({ name, email: email.toLowerCase(), password, role: 'customer' });
     await user.save();
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'defaultsecret', { expiresIn: '7d' });
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.json({ user: user.toSafeObject(), token });
@@ -49,10 +50,11 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email or password' });
     }
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'defaultsecret', { expiresIn: '7d' });
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.json({ user: user.toSafeObject(), token });
@@ -63,7 +65,12 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', (_req, res) => {
-  res.clearCookie('token');
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+  });
   res.json({ success: true });
 });
 
