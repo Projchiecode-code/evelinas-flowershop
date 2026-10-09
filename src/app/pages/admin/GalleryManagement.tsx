@@ -16,7 +16,7 @@ export function GalleryManagement() {
     const matchSearch = p.customerName.toLowerCase().includes(search.toLowerCase()) || p.caption.toLowerCase().includes(search.toLowerCase());
     const matchFilter = filter === 'all' || (filter === 'approved' ? p.approved && !p.featured : filter === 'pending' ? !p.approved : p.featured);
     return matchSearch && matchFilter;
-  }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const pendingCount = photos.filter(p => !p.approved).length;
   const featuredCount = photos.filter(p => p.featured).length;

@@ -21,7 +21,7 @@ export function ReviewsManagement() {
     const matchSearch = r.customerName.toLowerCase().includes(search.toLowerCase()) || r.comment.toLowerCase().includes(search.toLowerCase());
     const matchFilter = filter === 'all' || (filter === 'approved' ? r.approved : !r.approved);
     return matchSearch && matchFilter;
-  }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const pendingCount = reviews.filter(r => !r.approved).length;
   const approvedCount = reviews.filter(r => r.approved).length;

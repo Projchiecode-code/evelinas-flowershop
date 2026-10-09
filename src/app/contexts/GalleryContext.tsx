@@ -34,6 +34,18 @@ interface GalleryContextType {
 
 const GalleryContext = createContext<GalleryContextType | undefined>(undefined);
 
+// The API returns raw Mongo docs: `_id` and ISO date strings. Gallery screens
+// read `id` and call `.getTime()` on `createdAt` (sorting, timeAgo), so every
+// doc is normalised the moment it enters state — both on fetch and in the
+// single-item responses that submit/approve/feature/like merge back in.
+function normalizePhoto(raw: any): GalleryPhoto {
+  return {
+    ...raw,
+    id: raw?.id || raw?._id || '',
+    createdAt: raw?.createdAt ? new Date(raw.createdAt) : new Date(),
+  } as GalleryPhoto;
+}
+
 export function GalleryProvider({ children }: { children: ReactNode }) {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [comments, setComments] = useState<GalleryComment[]>(INITIAL_COMMENTS);
@@ -44,7 +56,10 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       const apiPhotos = await galleryApi.getAll();
       // Combine mock gallery with API photos (API photos first for newest)
-      const combinedPhotos = [...apiPhotos, ...mockGallery];
+      const combinedPhotos = [
+        ...(Array.isArray(apiPhotos) ? apiPhotos : []).map(normalizePhoto),
+        ...mockGallery,
+      ];
       setPhotos(combinedPhotos);
     } catch (err) {
       console.error('Failed to fetch gallery:', err);
@@ -61,7 +76,7 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const submitPhoto = async (data: Omit<GalleryPhoto, 'id' | 'createdAt' | 'approved' | 'featured' | 'likes'>) => {
     try {
       const res = await galleryApi.submit(data);
-      setPhotos(prev => [res, ...prev]);
+      setPhotos(prev => [normalizePhoto(res), ...prev]);
     } catch (err) {
       console.error('Submit photo failed:', err);
     }
@@ -70,7 +85,7 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const approvePhoto = async (id: string) => {
     try {
       const res = await galleryApi.approve(id);
-      setPhotos(prev => prev.map(p => p.id === id ? res : p));
+      setPhotos(prev => prev.map(p => p.id === id ? normalizePhoto(res) : p));
     } catch (err) {
       console.error('Approve photo failed:', err);
     }
@@ -88,7 +103,7 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const featurePhoto = async (id: string, featured: boolean) => {
     try {
       const res = await galleryApi.feature(id);
-      setPhotos(prev => prev.map(p => p.id === id ? res : p));
+      setPhotos(prev => prev.map(p => p.id === id ? normalizePhoto(res) : p));
     } catch (err) {
       console.error('Feature photo failed:', err);
     }
@@ -97,7 +112,7 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const likePhoto = async (id: string) => {
     try {
       const res = await galleryApi.like(id);
-      setPhotos(prev => prev.map(p => p.id === id ? res : p));
+      setPhotos(prev => prev.map(p => p.id === id ? normalizePhoto(res) : p));
     } catch (err) {
       console.error('Like photo failed:', err);
     }

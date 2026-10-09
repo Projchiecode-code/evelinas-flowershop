@@ -50,7 +50,10 @@ export function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-pink-100 z-40 overflow-hidden">
+          {/* Mobile: viewport-anchored panel under the header — anchored to the
+              bell (mid-row on phones) it hung ~120px off the left edge and the
+              contents were unreadable. sm+: the original right-aligned dropdown. */}
+          <div className="fixed left-4 right-4 top-20 w-auto sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-2xl shadow-2xl border border-pink-100 z-40 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-rose-500 to-purple-600 text-white">
               <div className="flex items-center gap-2">
