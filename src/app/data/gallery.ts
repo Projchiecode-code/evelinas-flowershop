@@ -1,0 +1,13 @@
+import { GalleryPhoto } from '../types';
+
+export const mockGallery: GalleryPhoto[] = [
+  { id: 'g1', bouquetId: '1', bouquetName: 'Pink Rose Elegance', customerName: 'Sofia R.', imageUrl: 'https://images.unsplash.com/photo-1587371921769-eda287cc0209?w=600&q=80', caption: 'My anniversary surprise! 💕', approved: true, featured: true, createdAt: new Date('2026-06-01'), likes: 47 },
+  { id: 'g2', bouquetId: '8', bouquetName: 'Peony Perfection', customerName: 'Isabelle F.', imageUrl: 'https://images.unsplash.com/photo-1609840533612-0cdfb9418281?w=600&q=80', caption: 'Wedding centrepiece goals! 🌸', approved: true, featured: true, createdAt: new Date('2026-05-28'), likes: 89 },
+  { id: 'g3', bouquetId: '2', bouquetName: 'Classic Red Romance', customerName: 'Elena V.', imageUrl: 'https://images.unsplash.com/photo-1669869608865-84bb10423f99?w=600&q=80', caption: 'He knows the way to my heart 🌹', approved: true, featured: true, createdAt: new Date('2026-06-05'), likes: 63 },
+  { id: 'g4', bouquetId: '4', bouquetName: 'Sunshine Delight', customerName: 'Camille B.', imageUrl: 'https://images.unsplash.com/photo-1752765579886-12c3681d9cca?w=600&q=80', caption: "Mom's birthday joy ☀️", approved: true, featured: true, createdAt: new Date('2026-06-08'), likes: 34 },
+  { id: 'g5', bouquetId: '7', bouquetName: 'Exotic Orchid Dream', customerName: 'Priya M.', imageUrl: 'https://images.unsplash.com/photo-1761654713504-7cf1bd412869?w=600&q=80', caption: 'Still gorgeous two weeks later! 🌺', approved: true, featured: false, createdAt: new Date('2026-06-03'), likes: 28 },
+  { id: 'g6', bouquetId: '5', bouquetName: 'Purple Spring Tulips', customerName: 'Lucas P.', imageUrl: 'https://images.unsplash.com/photo-1773017024707-f1014bb0d253?w=600&q=80', caption: 'Spring in our living room 💜', approved: true, featured: false, createdAt: new Date('2026-06-14'), likes: 19 },
+  { id: 'g7', bouquetId: '6', bouquetName: 'Garden Mix Paradise', customerName: 'James L.', imageUrl: 'https://images.unsplash.com/photo-1679678109868-cb5bd66d61dc?w=600&q=80', caption: "Office congrats flowers 🎉", approved: true, featured: false, createdAt: new Date('2026-06-12'), likes: 22 },
+  { id: 'g8', bouquetId: '3', bouquetName: 'White Lily Purity', customerName: 'Alex C.', imageUrl: 'https://images.unsplash.com/photo-1687946271298-caa66056eef1?w=600&q=80', caption: 'Pure elegance 🤍', approved: false, featured: false, createdAt: new Date('2026-06-16'), likes: 0 },
+  { id: 'g9', bouquetId: '1', bouquetName: 'Pink Rose Elegance', customerName: 'Maria G.', imageUrl: 'https://images.unsplash.com/photo-1587371921769-eda287cc0209?w=600&q=80', caption: 'Valentine\'s Day perfection! 💗', approved: false, featured: false, createdAt: new Date('2026-06-17'), likes: 0 },
+];

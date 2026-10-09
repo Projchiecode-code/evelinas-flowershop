@@ -1,0 +1,195 @@
+import { Link } from 'react-router';
+import { Trash2, Plus, Minus, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { Separator } from '../components/ui/separator';
+import { useCart } from '../contexts/CartContext';
+
+export function Cart() {
+  const { cart, removeFromCart, updateQuantity, getCartTotal } = useCart();
+
+  if (cart.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <ShoppingBag className="w-24 h-24 text-gray-300 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Your cart is empty</h2>
+          <p className="text-gray-600 mb-6">
+            Add some beautiful bouquets to get started!
+          </p>
+          <Link to="/shop">
+            <Button size="lg">Browse Bouquets</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const subtotal = getCartTotal();
+  const deliveryFee = subtotal > 100 ? 0 : 9.99;
+  const total = subtotal + deliveryFee;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-4xl font-bold mb-8">Shopping Cart</h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Cart Items */}
+          <div className="lg:col-span-2 space-y-4">
+            {cart.map(item => (
+              <Card key={item.bouquet.id}>
+                <CardContent className="p-6">
+                  <div className="flex gap-6">
+                    <img
+                      src={item.bouquet.image}
+                      alt={item.bouquet.name}
+                      className="w-32 h-32 object-cover rounded-lg"
+                    />
+                    
+                    <div className="flex-1">
+                      <div className="flex justify-between mb-2">
+                        <div>
+                          <Link
+                            to={`/bouquet/${item.bouquet.id}`}
+                            className="text-lg font-semibold hover:text-purple-600 transition-colors"
+                          >
+                            {item.bouquet.name}
+                          </Link>
+                          <p className="text-sm text-gray-600">
+                            {item.bouquet.category}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => removeFromCart(item.bouquet.id)}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      {item.deliveryDate && (
+                        <p className="text-sm text-gray-600 mb-2">
+                          📅 Delivery: {new Date(item.deliveryDate).toLocaleDateString()}
+                        </p>
+                      )}
+
+                      {item.customMessage && (
+                        <p className="text-sm text-gray-600 mb-2 italic">
+                          💌 "{item.customMessage}"
+                        </p>
+                      )}
+
+                      <div className="flex items-center justify-between mt-4">
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateQuantity(item.bouquet.id, item.quantity - 1)}
+                          >
+                            <Minus className="w-4 h-4" />
+                          </Button>
+                          <span className="font-semibold w-8 text-center">
+                            {item.quantity}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateQuantity(item.bouquet.id, item.quantity + 1)}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-sm text-gray-500">
+                            ${item.bouquet.price.toFixed(2)} each
+                          </p>
+                          <p className="text-xl font-bold text-purple-600">
+                            ${(item.bouquet.price * item.quantity).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Order Summary */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-24">
+              <CardContent className="p-6">
+                <h2 className="text-2xl font-bold mb-6">Order Summary</h2>
+                
+                <div className="space-y-3 mb-6">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-semibold">${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Delivery Fee</span>
+                    <span className="font-semibold">
+                      {deliveryFee === 0 ? (
+                        <span className="text-green-600">FREE</span>
+                      ) : (
+                        `$${deliveryFee.toFixed(2)}`
+                      )}
+                    </span>
+                  </div>
+                  
+                  {deliveryFee > 0 && (
+                    <p className="text-sm text-gray-500">
+                      💡 Spend ${(100 - subtotal).toFixed(2)} more for free delivery!
+                    </p>
+                  )}
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between text-lg">
+                    <span className="font-semibold">Total</span>
+                    <span className="font-bold text-purple-600">
+                      ${total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <Link to="/checkout">
+                  <Button size="lg" className="w-full mb-4">
+                    Proceed to Checkout
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+
+                <Link to="/shop">
+                  <Button variant="outline" className="w-full">
+                    Continue Shopping
+                  </Button>
+                </Link>
+
+                <div className="mt-6 pt-6 border-t">
+                  <h3 className="font-semibold mb-3">Order Benefits</h3>
+                  <ul className="space-y-2 text-sm text-gray-600">
+                    <li className="flex items-center gap-2">
+                      ✓ Real-time order tracking
+                    </li>
+                    <li className="flex items-center gap-2">
+                      ✓ Same-day delivery available
+                    </li>
+                    <li className="flex items-center gap-2">
+                      ✓ 100% freshness guarantee
+                    </li>
+                    <li className="flex items-center gap-2">
+                      ✓ Secure payment processing
+                    </li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
