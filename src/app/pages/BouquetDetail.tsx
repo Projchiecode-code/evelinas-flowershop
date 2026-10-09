@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router';
 import { ShoppingCart, Heart, ArrowLeft, Package, Truck, CheckCircle, Star, Camera, Send, Upload, X, ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -11,10 +11,12 @@ import { BouquetCard } from '../components/BouquetCard';
 import { useProducts } from '../contexts/ProductsContext';
 import { useCart } from '../contexts/CartContext';
 import { useFavorites } from '../contexts/FavoritesContext';
+import { useOrders } from '../contexts/OrderContext';
 import { useReviews } from '../contexts/ReviewsContext';
 import { useGallery } from '../contexts/GalleryContext';
 import { useAuth } from '../contexts/AuthContext';
-import { AIRecommendationEngine } from '../utils/aiRecommendations';
+import { AIRecommendationEngine, buildSignals } from '../utils/aiRecommendations';
+import { recordView, getRecentViews } from '../utils/viewHistory';
 import { toast } from 'sonner';
 
 function StarRating({ value, onChange }: { value: number; onChange?: (v: number) => void }) {
@@ -35,10 +37,17 @@ export function BouquetDetail() {
   const { id } = useParams();
   const bouquet = bouquets.find(b => b.id === id);
   const { addToCart } = useCart();
-  const { isFavorite, toggleFavorite } = useFavorites();
-  const { getReviewsForBouquet, addReview } = useReviews();
+  const { isFavorite, toggleFavorite, favorites } = useFavorites();
+  const { getReviewsForBouquet, getApprovedReviews, addReview } = useReviews();
+  const { orders } = useOrders();
   const { getApprovedPhotos } = useGallery();
   const { user } = useAuth();
+
+  // Remember this page view — it feeds the "similar to what you browsed"
+  // signal used by recommendations across the site.
+  useEffect(() => {
+    if (bouquet) recordView(bouquet.id);
+  }, [bouquet]);
 
   const [quantity, setQuantity] = useState(1);
   const [customMessage, setCustomMessage] = useState('');
@@ -72,7 +81,15 @@ export function BouquetDetail() {
 
   const reviews = getReviewsForBouquet(bouquet.id);
   const galleryPhotos = getApprovedPhotos().filter(p => p.bouquetId === bouquet.id);
-  const similarBouquets = AIRecommendationEngine.getSimilarBouquets(bouquet.id, 4);
+  // Live signals for the similar row: real star ratings, this shopper's view
+  // history, their order history, and their favourites.
+  const signals = buildSignals({
+    reviews: getApprovedReviews(),
+    viewedIds: getRecentViews(),
+    orders,
+    favoriteCategories: favorites.map(f => f.category),
+  });
+  const similarBouquets = AIRecommendationEngine.getSimilarBouquets(bouquet.id, 4, signals);
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const fav = isFavorite(bouquet.id);
   const minDate = new Date(); minDate.setDate(minDate.getDate() + 1);

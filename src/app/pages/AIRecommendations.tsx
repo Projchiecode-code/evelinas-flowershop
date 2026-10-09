@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Sparkles, ChevronRight, RotateCcw, ShoppingCart, Star } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -6,6 +6,15 @@ import { Badge } from '../components/ui/badge';
 import { BouquetCard } from '../components/BouquetCard';
 import { getCatalog } from '../data/catalog';
 import { useProducts } from '../contexts/ProductsContext';
+import { useReviews } from '../contexts/ReviewsContext';
+import { useOrders } from '../contexts/OrderContext';
+import { useFavorites } from '../contexts/FavoritesContext';
+import { getRecentViews } from '../utils/viewHistory';
+import {
+  buildSignals,
+  applySignals,
+  RecommendationSignals,
+} from '../utils/aiRecommendations';
 import { Bouquet } from '../types';
 
 interface Step {
@@ -124,23 +133,40 @@ function scoreRule(bouquet: Bouquet, answers: Record<string, string>): { score: 
   return { score, reasons: reasons.slice(0, 3) };
 }
 
-function getRecommendations(answers: Record<string, string>): RecommendedBouquet[] {
-  return getCatalog()
+function getRecommendations(answers: Record<string, string>, signals: RecommendationSignals): RecommendedBouquet[] {
+  const ranked = getCatalog()
     .map(b => {
       const { score, reasons } = scoreRule(b, answers);
-      return { ...b, score, reasons };
+      const signal = applySignals(b, signals);
+      if (signal.excluded) return null; // out of stock
+      return {
+        ...b,
+        score: score + signal.bonus,
+        // Quiz answers first — the shopper's intent outranks behavioural nudges.
+        reasons: [...reasons, ...signal.reasons].slice(0, 5),
+      };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4);
+    .filter((b): b is RecommendedBouquet => b !== null)
+    .sort((a, b) => b.score - a.score);
+
+  // Fresh options first; bouquets they already own only backfill the list so
+  // a small catalog can still return four picks.
+  const fresh = ranked.filter(b => !signals.purchased.includes(b.id));
+  const reorders = ranked.filter(b => signals.purchased.includes(b.id));
+  return [...fresh, ...reorders].slice(0, 4);
 }
 
 export function AIRecommendations() {
   // Subscribes to the live catalog so results refresh if it is still loading.
   useProducts();
+  const { getApprovedReviews } = useReviews();
+  const { orders } = useOrders();
+  const { favorites } = useFavorites();
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<RecommendedBouquet[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0);
 
   const handleAnswer = (stepId: string, value: string) => {
     const newAnswers = { ...answers, [stepId]: value };
@@ -149,23 +175,62 @@ export function AIRecommendations() {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
+      setLoadProgress(0);
       setLoading(true);
-      setTimeout(() => {
-        setResults(getRecommendations(newAnswers));
-        setLoading(false);
-      }, 1200);
     }
   };
+
+  // The "thinking" phase runs for 5–10 seconds behind a real progress bar.
+  // The picks are computed the moment the bar completes, so the wait reads as
+  // work actually happening rather than a fixed spinner timeout.
+  useEffect(() => {
+    if (!loading) return;
+
+    const duration = 5000 + Math.random() * 5000; // 5–10s, different every run
+    const start = performance.now();
+    const timer = window.setInterval(() => {
+      const t = Math.min((performance.now() - start) / duration, 1);
+      // Ease-out (quick start, crawls near the end) plus a little jitter so
+      // the bar never ticks like a metronome; hold just under 100 until done.
+      const eased = 1 - Math.pow(1 - t, 1.8);
+      const jitter = t < 0.95 ? Math.random() * 0.02 : 0;
+      setLoadProgress(t >= 1 ? 100 : Math.min(Math.round((eased + jitter) * 100), 97));
+
+      if (t >= 1) {
+        window.clearInterval(timer);
+        // Live inputs at completion: ratings, view history, orders, favourites.
+        setResults(getRecommendations(answers, buildSignals({
+          reviews: getApprovedReviews(),
+          viewedIds: getRecentViews(),
+          orders,
+          favoriteCategories: favorites.map(f => f.category),
+        })));
+        setLoading(false);
+      }
+    }, 120);
+
+    // Only re-armed when `loading` flips — the closure deliberately holds the
+    // answers and context from the render that started the run.
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   const reset = () => {
     setCurrentStep(0);
     setAnswers({});
     setResults(null);
+    setLoadProgress(0);
     setLoading(false);
   };
 
   const step = STEPS[currentStep];
   const progress = ((currentStep) / STEPS.length) * 100;
+  const loadStage =
+    loadProgress < 18 ? 'Reading your answers…'
+    : loadProgress < 42 ? 'Checking live customer ratings…'
+    : loadProgress < 68 ? 'Reviewing your recent activity…'
+    : loadProgress < 92 ? 'Matching bouquets from the catalog…'
+    : 'Finalizing your picks…';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50">
@@ -244,7 +309,27 @@ export function AIRecommendations() {
           <div className="bg-white rounded-3xl shadow-lg border border-pink-100 p-16 text-center">
             <div className="animate-spin text-6xl mb-6">🌸</div>
             <h3 className="text-xl font-bold text-gray-800 mb-2">Finding your perfect bouquet…</h3>
-            <p className="text-gray-500">Our AI is analyzing your preferences</p>
+            <p className="text-gray-500 mb-8">{loadStage}</p>
+
+            <div className="max-w-md mx-auto">
+              <div
+                className="h-3 w-full bg-rose-100 rounded-full overflow-hidden"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={loadProgress}
+                aria-label="Finding your picks"
+              >
+                <div
+                  className="h-full bg-gradient-to-r from-rose-500 to-purple-500 transition-[width] duration-200 ease-out"
+                  style={{ width: `${loadProgress}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 mt-2.5">
+                <span>This usually takes 5–10 seconds</span>
+                <span className="font-semibold text-rose-600">{loadProgress}%</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -254,7 +339,9 @@ export function AIRecommendations() {
             <div className="text-center mb-10">
               <div className="text-5xl mb-3">✨</div>
               <h2 className="text-3xl font-bold text-gray-800 mb-2">Your Perfect Picks</h2>
-              <p className="text-gray-500 mb-6">Based on your preferences, we recommend these bouquets</p>
+              <p className="text-gray-500 mb-6">
+                Personalized with your answers, live customer ratings, and your recent activity
+              </p>
               <div className="flex flex-wrap justify-center gap-2 mb-6">
                 {STEPS.map(s => (
                   answers[s.id] && (
@@ -267,8 +354,24 @@ export function AIRecommendations() {
               <Button onClick={reset} variant="outline" className="border-rose-200 text-rose-600 hover:bg-rose-50">
                 <RotateCcw className="w-4 h-4 mr-2" /> Start Over
               </Button>
+              <p className="text-xs text-gray-400 mt-4 max-w-md mx-auto">
+                Sold-out bouquets are never suggested, and we skip anything you&apos;ve already ordered
+                unless you&apos;re running out of fresh options.
+              </p>
             </div>
 
+            {results.length === 0 && (
+              <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-10 text-center">
+                <div className="text-4xl mb-3">🌱</div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Everything is sold out right now</h3>
+                <p className="text-gray-500 mb-6">Check back soon — fresh bouquets arrive daily.</p>
+                <Link to="/catalog">
+                  <Button className="bg-rose-500 hover:bg-rose-600 text-white">Browse Full Catalog</Button>
+                </Link>
+              </div>
+            )}
+
+            {results.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
               {results.map((b, i) => (
                 <div key={b.id} className="bg-white rounded-2xl border border-pink-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
@@ -300,7 +403,9 @@ export function AIRecommendations() {
                 </div>
               ))}
             </div>
+            )}
 
+            {results.length > 0 && (
             <div className="text-center">
               <p className="text-gray-500 mb-4">Want to explore more options?</p>
               <Link to="/catalog">
@@ -309,6 +414,7 @@ export function AIRecommendations() {
                 </Button>
               </Link>
             </div>
+            )}
           </div>
         )}
       </div>
