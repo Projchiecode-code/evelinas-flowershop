@@ -39,49 +39,54 @@ export function Cart() {
           <div className="lg:col-span-2 space-y-4">
             {cart.map(item => (
               <Card key={item.bouquet.id}>
-                <CardContent className="p-6">
-                  <div className="flex gap-6">
+                <CardContent className="p-4 sm:p-6">
+                  {/* min-w-0 + shrink-0 on the controls: without them long
+                      names / big prices can't shrink below their min-content
+                      width, so the whole column overflowed the card on narrow
+                      screens and the price and delete button collided. */}
+                  <div className="flex gap-3 sm:gap-6">
                     <img
                       src={item.bouquet.image}
                       alt={item.bouquet.name}
-                      className="w-32 h-32 object-cover rounded-lg"
+                      className="w-20 h-20 sm:w-32 sm:h-32 shrink-0 object-cover rounded-lg"
                     />
                     
-                    <div className="flex-1">
-                      <div className="flex justify-between mb-2">
-                        <div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between gap-3 mb-2">
+                        <div className="min-w-0">
                           <Link
                             to={`/bouquet/${item.bouquet.id}`}
-                            className="text-lg font-semibold hover:text-purple-600 transition-colors"
+                            className="text-lg font-semibold hover:text-purple-600 transition-colors break-words"
                           >
                             {item.bouquet.name}
                           </Link>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-sm text-gray-600 break-words">
                             {item.bouquet.category}
                           </p>
                         </div>
                         <button
                           onClick={() => removeFromCart(item.bouquet.id)}
-                          className="text-red-500 hover:text-red-700 transition-colors"
+                          aria-label={`Remove ${item.bouquet.name} from cart`}
+                          className="text-red-500 hover:text-red-700 transition-colors shrink-0 self-start p-1 -m-1"
                         >
                           <Trash2 className="w-5 h-5" />
                         </button>
                       </div>
 
                       {item.deliveryDate && (
-                        <p className="text-sm text-gray-600 mb-2">
+                        <p className="text-sm text-gray-600 mb-2 break-words">
                           📅 Delivery: {new Date(item.deliveryDate).toLocaleDateString()}
                         </p>
                       )}
 
                       {item.customMessage && (
-                        <p className="text-sm text-gray-600 mb-2 italic">
+                        <p className="text-sm text-gray-600 mb-2 italic break-words">
                           💌 "{item.customMessage}"
                         </p>
                       )}
 
-                      <div className="flex items-center justify-between mt-4">
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                           <Button
                             variant="outline"
                             size="sm"
@@ -89,7 +94,7 @@ export function Cart() {
                           >
                             <Minus className="w-4 h-4" />
                           </Button>
-                          <span className="font-semibold w-8 text-center">
+                          <span className="font-semibold min-w-[2rem] text-center">
                             {item.quantity}
                           </span>
                           <Button
@@ -101,11 +106,11 @@ export function Cart() {
                           </Button>
                         </div>
 
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">
+                        <div className="text-right min-w-0">
+                          <p className="text-sm text-gray-500 break-words">
                             ${item.bouquet.price.toFixed(2)} each
                           </p>
-                          <p className="text-xl font-bold text-purple-600">
+                          <p className="text-xl font-bold text-purple-600 break-words">
                             ${(item.bouquet.price * item.quantity).toFixed(2)}
                           </p>
                         </div>

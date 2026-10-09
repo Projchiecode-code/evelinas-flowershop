@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authApi } from '../api/client';
+import { authApi, api } from '../api/client';
 
 export interface User {
   id: string;
@@ -26,13 +26,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check auth on mount
+  // Check auth on mount. `api` already carries the persisted token from
+  // localStorage (set at login), so /auth/me authenticates via the
+  // Authorization header — it works even where iOS Safari refuses the cookie.
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const res = (await authApi.me()) as User;
         setUser(res);
-      } catch {
+      } catch (err) {
+        // Only drop the stored token when the server actually rejected it —
+        // a network blip shouldn't sign the user out.
+        if ((err as { status?: number })?.status === 401) api.setToken(null);
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -43,7 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const res = (await authApi.login({ email, password })) as { user: User };
+      const res = (await authApi.login({ email, password })) as { user: User; token?: string };
+      if (res.token) api.setToken(res.token);
       setUser(res.user);
       return { success: true };
     } catch (err: any) {
@@ -53,7 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (name: string, email: string, password: string) => {
     try {
-      const res = (await authApi.register({ name, email, password })) as { user: User };
+      const res = (await authApi.register({ name, email, password })) as { user: User; token?: string };
+      if (res.token) api.setToken(res.token);
       setUser(res.user);
       return { success: true };
     } catch (err: any) {
@@ -67,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    api.setToken(null);
     setUser(null);
   };
 

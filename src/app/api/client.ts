@@ -1,10 +1,29 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const TOKEN_STORAGE_KEY = 'evelinas_token';
 
 class ApiClient {
-  private token: string | null = null;
+  // iOS Safari can refuse the cross-site session cookie (ITP blocks it while
+  // Android Chrome still sends it), which left every request 401 — "session
+  // expired", empty notifications. The API also accepts
+  // `Authorization: Bearer <token>`, so keep the token from the login /
+  // register response on disk and attach it to every request. The httpOnly
+  // cookie remains as a fallback wherever it does work.
+  private token: string | null = (() => {
+    try {
+      return localStorage.getItem(TOKEN_STORAGE_KEY);
+    } catch {
+      return null; // storage unavailable (private mode) — cookie still works
+    }
+  })();
 
   setToken(token: string | null) {
     this.token = token;
+    try {
+      if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      else localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+      // ignore — in-memory token still used for this session
+    }
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
