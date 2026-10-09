@@ -1,24 +1,55 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router';
 import { CheckCircle, Package, Calendar, MapPin, Phone, Mail } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { useOrders } from '../contexts/OrderContext';
+import { Order } from '../types';
 import confetti from 'canvas-confetti';
 
 export function OrderConfirmation() {
   const { orderId } = useParams();
-  const { getOrder } = useOrders();
-  const order = getOrder(orderId || '');
+  const { orders, getOrder } = useOrders();
+  const [order, setOrder] = useState<Order | undefined>(undefined);
+  const [resolved, setResolved] = useState(false);
+
+  // `getOrder` is async — resolve it once so the page doesn't render an
+  // unfinished promise (which used to crash on `order.items.map`).
+  useEffect(() => {
+    let stale = false;
+    const fromList = orders.find(o => o.id === orderId);
+    if (fromList) {
+      setOrder(fromList);
+      setResolved(true);
+      return;
+    }
+    getOrder(orderId || '')
+      .then(found => { if (!stale) setOrder(found); })
+      .catch(() => { /* handled below */ })
+      .finally(() => { if (!stale) setResolved(true); });
+    return () => { stale = true; };
+  }, [orderId, orders, getOrder]);
 
   useEffect(() => {
+    if (!order) return;
     // Celebrate with confetti!
     confetti({
       particleCount: 100,
       spread: 70,
       origin: { y: 0.6 }
     });
-  }, []);
+  }, [order]);
+
+  if (!resolved) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center text-gray-500">
+          <span className="inline-block animate-spin text-3xl mb-3">🌸</span>
+          <p>Loading your order...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!order) {
     return (

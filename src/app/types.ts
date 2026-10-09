@@ -16,6 +16,8 @@ export interface CartItem {
   quantity: number;
   customMessage?: string;
   deliveryDate?: string;
+  /** Price snapshot stored on the order item at purchase time (from the API). */
+  price?: number;
 }
 
 export type PaymentMethod = 'cod' | 'e-wallet' | 'bank-transfer';
@@ -45,6 +47,20 @@ export type OrderStatus =
   | 'to-rate'
   | 'rated'
   | 'cancelled';
+
+/** Payload sent to POST /orders — bouquet references are ids, not objects. */
+export interface OrderPayload {
+  items: { bouquet: string; quantity: number; customMessage?: string; deliveryDate?: string }[];
+  total: number;
+  status: OrderStatus;
+  customerName: string;
+  deliveryAddress: string;
+  phone: string;
+  email: string;
+  estimatedDelivery: Date;
+  paymentMethod?: PaymentMethod;
+  paymentProof?: string;
+}
 
 export interface TrackingUpdate {
   status: OrderStatus;

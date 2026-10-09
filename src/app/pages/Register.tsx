@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Flower2, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Flower2, Eye, EyeOff, UserPlus, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,7 +35,14 @@ export function Register() {
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-3xl shadow-xl border border-pink-100 overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-600 to-rose-500 p-8 text-center">
+          <div className="relative bg-gradient-to-r from-purple-600 to-rose-500 p-8 pt-10 text-center">
+            <Link
+              to="/login"
+              aria-label="Back to sign in"
+              className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/20 hover:bg-white/35 active:scale-95 text-white text-xs font-semibold px-3 py-2 backdrop-blur-sm transition-all focus:outline-none focus:ring-2 focus:ring-white/60"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back
+            </Link>
             <div className="bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3">
               <Flower2 className="w-8 h-8 text-white" />
             </div>
@@ -122,8 +129,13 @@ export function Register() {
           </div>
         </div>
 
-        <p className="text-center text-sm text-gray-400 mt-6">
-          <Link to="/" className="hover:text-rose-600 transition-colors">← Back to Evelina's Flowershop</Link>
+        <p className="text-center mt-6">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-500 font-medium hover:text-rose-600 transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Evelina's Flowershop
+          </Link>
         </p>
       </div>
     </div>

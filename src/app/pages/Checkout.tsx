@@ -40,6 +40,7 @@ export function Checkout() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
   const [proofFile, setProofFile] = useState<string | null>(null);
   const [proofFileName, setProofFileName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -56,8 +57,9 @@ export function Checkout() {
 
   const removeProof = () => { setProofFile(null); setProofFileName(''); if (fileRef.current) fileRef.current.value = ''; };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!formData.fullName || !formData.email || !formData.phone || !formData.address) {
       toast.error('Please fill in all required fields'); return;
     }
@@ -71,18 +73,37 @@ export function Checkout() {
     const estimatedDelivery = new Date();
     estimatedDelivery.setDate(estimatedDelivery.getDate() + 1);
 
-    const orderId = createOrder({
-      items: cart, total, status: 'to-pay',
-      customerName: formData.fullName,
-      deliveryAddress: `${formData.address}, ${formData.city}, ${formData.zipCode}`,
-      phone: formData.phone, email: formData.email, estimatedDelivery,
-      paymentMethod,
-      paymentProof: proofFile || undefined,
-    });
+    setSubmitting(true);
+    try {
+      // The API expects bouquet ids (it re-reads the price from the database),
+      // so map the cart down to plain item references before creating the order.
+      const orderId = await createOrder({
+        items: cart.map(item => ({
+          bouquet: item.bouquet.id,
+          quantity: item.quantity,
+          customMessage: item.customMessage || '',
+          deliveryDate: item.deliveryDate || '',
+        })),
+        total,
+        status: 'to-pay',
+        customerName: formData.fullName,
+        deliveryAddress: `${formData.address}, ${formData.city}, ${formData.zipCode}`,
+        phone: formData.phone,
+        email: formData.email,
+        estimatedDelivery,
+        paymentMethod,
+        paymentProof: proofFile || undefined,
+      });
 
-    clearCart();
-    toast.success('Order placed successfully!');
-    navigate(`/order-confirmation/${orderId}`);
+      clearCart();
+      toast.success('Order placed successfully!');
+      navigate(`/order-confirmation/${orderId}`);
+    } catch (err) {
+      console.error('Checkout failed:', err);
+      toast.error('We could not place your order. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (cart.length === 0) { navigate('/cart'); return null; }
@@ -299,8 +320,12 @@ export function Checkout() {
                       </div>
                     </div>
 
-                    <Button type="submit" size="lg" className="w-full bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white">
-                      Place Order
+                    <Button type="submit" size="lg" disabled={submitting} className="w-full bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white">
+                      {submitting ? (
+                        <span className="flex items-center gap-2"><span className="animate-spin">🌸</span> Placing order...</span>
+                      ) : (
+                        'Place Order'
+                      )}
                     </Button>
                     <p className="text-xs text-gray-400 text-center">By placing this order you agree to our terms</p>
                   </div>

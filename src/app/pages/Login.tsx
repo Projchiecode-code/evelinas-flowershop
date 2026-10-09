@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Flower2, Eye, EyeOff, LogIn, User } from 'lucide-react';
+import { Flower2, Eye, EyeOff, LogIn, User, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,7 +33,14 @@ export function Login() {
         {/* Card */}
         <div className="bg-white rounded-3xl shadow-xl border border-pink-100 overflow-hidden">
           {/* Top gradient */}
-          <div className="bg-gradient-to-r from-rose-500 to-purple-600 p-8 text-center">
+          <div className="relative bg-gradient-to-r from-rose-500 to-purple-600 p-8 pt-10 text-center">
+            <Link
+              to="/"
+              aria-label="Back to Evelina's Flowershop"
+              className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/20 hover:bg-white/35 active:scale-95 text-white text-xs font-semibold px-3 py-2 backdrop-blur-sm transition-all focus:outline-none focus:ring-2 focus:ring-white/60"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back
+            </Link>
             <div className="bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3">
               <Flower2 className="w-8 h-8 text-white" />
             </div>
@@ -96,20 +103,23 @@ export function Login() {
                 <Link to="/register" className="text-rose-600 font-semibold hover:underline">Create one</Link>
               </p>
 
-              {/* Demo credentials */}
-              <div className="bg-purple-50 border border-purple-100 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-semibold text-purple-700 mb-2">Demo Credentials</p>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <p>👑 <strong>Admin:</strong> admin@flowershop.com / admin123</p>
-                  <p>👤 <strong>Customer:</strong> jane@example.com / password123</p>
-                </div>
-              </div>
+              {/* Account recovery */}
+              <p className="text-center text-sm text-gray-500">
+                <Link to="/forgot-password" className="text-purple-600 font-semibold hover:underline">
+                  Forgot your password?
+                </Link>
+              </p>
             </div>
           </div>
         </div>
 
-        <p className="text-center text-sm text-gray-400 mt-6">
-          <Link to="/" className="hover:text-rose-600 transition-colors">← Back to Evelina's Flowershop</Link>
+        <p className="text-center mt-6">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-500 font-medium hover:text-rose-600 transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Evelina's Flowershop
+          </Link>
         </p>
       </div>
     </div>
