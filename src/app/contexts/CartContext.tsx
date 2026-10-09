@@ -26,7 +26,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem(CART_STORAGE_KEY);
     if (saved) {
       try {
-        setCart(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Guard the shape too: valid JSON that isn't an array (e.g. a
+        // double-encoded value) used to crash Header and Cart with
+        // "cart.reduce is not a function".
+        setCart(Array.isArray(parsed) ? parsed : []);
       } catch {
         setCart([]);
       }

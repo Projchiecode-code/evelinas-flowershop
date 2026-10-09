@@ -1,13 +1,19 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Flower2, Eye, EyeOff, LogIn, User, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { useAuth } from '../contexts/AuthContext';
 
+/** Only allow same-site paths so `?redirect=` can never leave the app. */
+const safeTarget = (value: string | null) =>
+  value && value.startsWith('/') && !value.startsWith('//') ? value : '/';
+
 export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get('redirect');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -21,7 +27,7 @@ export function Login() {
     const result = await login(email, password);
     setLoading(false);
     if (result.success) {
-      navigate('/');
+      navigate(safeTarget(redirect), { replace: true });
     } else {
       setError(result.error || 'Login failed');
     }
@@ -49,6 +55,12 @@ export function Login() {
           </div>
 
           <div className="p-8">
+            {redirect && (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700">
+                <User className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>Please sign in to continue — we&apos;ll take you right back.</span>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="text-sm font-semibold text-gray-700 block mb-1.5">Email Address</label>
@@ -100,7 +112,12 @@ export function Login() {
             <div className="mt-6 pt-6 border-t border-rose-100">
               <p className="text-center text-sm text-gray-500 mb-4">
                 Don't have an account?{' '}
-                <Link to="/register" className="text-rose-600 font-semibold hover:underline">Create one</Link>
+                <Link
+                  to={redirect ? `/register?redirect=${encodeURIComponent(safeTarget(redirect))}` : '/register'}
+                  className="text-rose-600 font-semibold hover:underline"
+                >
+                  Create one
+                </Link>
               </p>
 
               {/* Account recovery */}

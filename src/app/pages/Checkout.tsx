@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router';
-import { CreditCard, MapPin, User, Upload, Banknote, Wallet, Truck, X, ImageIcon } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
+import { CreditCard, MapPin, User, Upload, Banknote, Wallet, Truck, X, ImageIcon, LogIn, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -8,9 +8,13 @@ import { Label } from '../components/ui/label';
 import { Separator } from '../components/ui/separator';
 import { useCart } from '../contexts/CartContext';
 import { useOrders } from '../contexts/OrderContext';
+import { useAuth } from '../contexts/AuthContext';
 import { productApi } from '../api/client';
 import { toast } from 'sonner';
 import { CartItem, PaymentMethod } from '../types';
+
+/** Where a signed-out shopper goes to sign in, and back to checkout afterwards. */
+const LOGIN_PATH = '/login?redirect=/checkout';
 
 /** Error whose message is safe to show to the customer. */
 class CheckoutError extends Error {}
@@ -82,8 +86,9 @@ const PAYMENT_DETAILS: Record<'e-wallet' | 'bank-transfer', { title: string; lin
 
 export function Checkout() {
   const navigate = useNavigate();
-  const { cart, getCartTotal, clearCart } = useCart();
+  const { cart, getCartTotal, clearCart, isLoading: isCartLoading } = useCart();
   const { createOrder } = useOrders();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -115,6 +120,14 @@ export function Checkout() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
+
+    // Orders belong to an account — POST /orders is authenticated.
+    if (!isAuthenticated) {
+      toast.error('Please sign in to place your order.');
+      navigate(LOGIN_PATH);
+      return;
+    }
+
     if (!formData.fullName || !formData.email || !formData.phone || !formData.address) {
       toast.error('Please fill in all required fields'); return;
     }
@@ -152,6 +165,13 @@ export function Checkout() {
       navigate(`/order-confirmation/${orderId}`);
     } catch (err) {
       console.error('Checkout failed:', err);
+      // Session expired between page load and submit (or the cookie was cleared).
+      const status = (err as { status?: number })?.status;
+      if (status === 401 || /no token|unauthorized|not authorized/i.test(String((err as Error)?.message))) {
+        toast.error('Your session has expired. Please sign in again to place your order.');
+        navigate(LOGIN_PATH);
+        return;
+      }
       toast.error(err instanceof CheckoutError ? err.message : 'We could not place your order. Please try again.');
     } finally {
       setSubmitting(false);
@@ -160,13 +180,15 @@ export function Checkout() {
 
   // An empty cart has nothing to check out. This used to call navigate()
   // during render, which raced the post-success navigation and bounced the
-  // customer back to an empty cart instead of the confirmation page.
+  // customer back to an empty cart instead of the confirmation page — it also
+  // fired on a cold load of /checkout, before the cart finished restoring
+  // from localStorage, kicking deep links back to /cart.
   useEffect(() => {
-    if (placedOrderId || submitting) return;
+    if (isCartLoading || placedOrderId || submitting) return;
     if (cart.length === 0) navigate('/cart');
-  }, [cart.length, placedOrderId, submitting, navigate]);
+  }, [isCartLoading, cart.length, placedOrderId, submitting, navigate]);
 
-  if (cart.length === 0 && !placedOrderId) return null;
+  if (isCartLoading || (cart.length === 0 && !placedOrderId)) return null;
 
   const subtotal = getCartTotal();
   const deliveryFee = subtotal > 100 ? 0 : 9.99;
@@ -181,6 +203,25 @@ export function Checkout() {
           <p className="text-rose-100 mt-1">Complete your order from Evelina's Flowershop</p>
         </div>
       </div>
+
+      {/* Signed-out shoppers are told up front, not after filling the form. */}
+      {!isAuthLoading && !isAuthenticated && (
+        <div className="container mx-auto px-4 pt-6">
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5 shadow-sm">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+            <p className="text-sm text-amber-800 flex-1 min-w-[200px]">
+              <span className="font-semibold">Sign in to place your order.</span>{' '}
+              You need an account to check out — your cart and details will be waiting when you get back.
+            </p>
+            <Link
+              to={LOGIN_PATH}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-rose-500 to-purple-600 px-4 text-sm font-semibold text-white shadow-sm hover:from-rose-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2"
+            >
+              <LogIn className="w-4 h-4" /> Sign In to Continue
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="container mx-auto px-4 py-8">
         <form onSubmit={handleSubmit}>

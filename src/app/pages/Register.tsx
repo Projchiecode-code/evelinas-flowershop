@@ -1,13 +1,22 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Flower2, Eye, EyeOff, UserPlus, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { useAuth } from '../contexts/AuthContext';
 
+/** Only allow same-site paths so `?redirect=` can never leave the app. */
+const safeTarget = (value: string | null) =>
+  value && value.startsWith('/') && !value.startsWith('//') ? value : '/';
+
 export function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get('redirect');
+  const loginPath = redirect
+    ? `/login?redirect=${encodeURIComponent(safeTarget(redirect))}`
+    : '/login';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +34,7 @@ export function Register() {
     const result = await register(name, email, password);
     setLoading(false);
     if (result.success) {
-      navigate('/');
+      navigate(safeTarget(redirect), { replace: true });
     } else {
       setError(result.error || 'Registration failed');
     }
@@ -37,7 +46,7 @@ export function Register() {
         <div className="bg-white rounded-3xl shadow-xl border border-pink-100 overflow-hidden">
           <div className="relative bg-gradient-to-r from-purple-600 to-rose-500 p-8 pt-10 text-center">
             <Link
-              to="/login"
+              to={loginPath}
               aria-label="Back to sign in"
               className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/20 hover:bg-white/35 active:scale-95 text-white text-xs font-semibold px-3 py-2 backdrop-blur-sm transition-all focus:outline-none focus:ring-2 focus:ring-white/60"
             >
@@ -123,7 +132,7 @@ export function Register() {
             <div className="mt-6 pt-6 border-t border-rose-100">
               <p className="text-center text-sm text-gray-500">
                 Already have an account?{' '}
-                <Link to="/login" className="text-rose-600 font-semibold hover:underline">Sign in</Link>
+                <Link to={loginPath} className="text-rose-600 font-semibold hover:underline">Sign in</Link>
               </p>
             </div>
           </div>
