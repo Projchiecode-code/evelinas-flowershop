@@ -154,4 +154,7 @@ export const userApi = {
   getOne: (id: string) => api.get(`/users/${id}`),
   update: (id: string, data: any) => api.patch(`/users/${id}`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
+  /** Self-service profile edit — any signed-in user, own record only. */
+  updateMe: (data: { name?: string; phone?: string; address?: string; city?: string; zipCode?: string }) =>
+    api.patch('/users/me', data),
 };

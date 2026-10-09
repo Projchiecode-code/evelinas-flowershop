@@ -9,6 +9,7 @@ import { useCart } from '../contexts/CartContext';
 import { useProducts } from '../contexts/ProductsContext';
 import { GalleryPhoto } from '../types';
 import { toast } from 'sonner';
+import { formatCurrency } from '../utils/currency';
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
 function PostCard({ photo }: { photo: GalleryPhoto }) {
@@ -133,7 +134,7 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
             <div className="flex-1 min-w-0">
               <p className="font-bold text-gray-800 text-sm truncate">{linkedBouquet.name}</p>
               <p className="text-xs text-gray-500 mt-0.5">{linkedBouquet.category}</p>
-              <p className="font-bold text-rose-600 text-sm mt-0.5">${linkedBouquet.price.toFixed(2)}</p>
+              <p className="font-bold text-rose-600 text-sm mt-0.5">{formatCurrency(linkedBouquet.price)}</p>
             </div>
             <div className="flex flex-col gap-1.5 shrink-0">
               <Button size="sm" onClick={handleAddToCart} className="bg-rose-500 hover:bg-rose-600 text-white text-xs whitespace-nowrap">

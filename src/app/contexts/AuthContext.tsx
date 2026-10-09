@@ -8,6 +8,9 @@ export interface User {
   role: 'customer' | 'admin';
   avatar?: string;
   joinedAt: Date;
+  /** Contact details editable from the Profile page (PATCH /users/me). */
+  phone?: string;
+  address?: string;
 }
 
 interface AuthContextType {
@@ -18,6 +21,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  /** Merge freshly-saved profile fields into the session user. */
+  updateUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -78,6 +83,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const updateUser = (patch: Partial<User>) => {
+    setUser(prev => (prev ? { ...prev, ...patch } : prev));
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -87,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       logout,
+      updateUser,
     }}>
       {children}
     </AuthContext.Provider>

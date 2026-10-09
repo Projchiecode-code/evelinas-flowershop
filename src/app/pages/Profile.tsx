@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { User, Mail, Phone, MapPin, Camera, Heart, ShoppingBag, Star, Edit2, Check } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '../components/ui/button';
@@ -8,15 +8,56 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { useOrders } from '../contexts/OrderContext';
 import { useReviews } from '../contexts/ReviewsContext';
+import { toast } from 'sonner';
+import { userApi } from '../api/client';
+import { formatCurrency } from '../utils/currency';
 
 export function Profile() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { favorites } = useFavorites();
   const { orders } = useOrders();
   const { reviews } = useReviews();
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '', phone: '', address: '' });
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '' });
+
+  // Populate the form once the session user resolves (auth/me is still in
+  // flight on first paint) and re-sync after every saved update.
+  useEffect(() => {
+    if (user) {
+      setForm({ name: user.name || '', email: user.email || '', phone: user.phone || '', address: user.address || '' });
+    }
+  }, [user]);
+
+  // The Save button really saves: PATCH /users/me, then merge the response
+  // into the session user. Email is display-only — changing it needs its own
+  // verification flow, so it isn't part of the whitelist.
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      toast.error('Name cannot be empty');
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = (await userApi.updateMe({
+        name: form.name.trim(),
+        phone: form.phone,
+        address: form.address,
+      })) as { name?: string; phone?: string; address?: string };
+      updateUser({
+        name: updated.name ?? form.name.trim(),
+        phone: updated.phone ?? form.phone,
+        address: updated.address ?? form.address,
+      });
+      toast.success('Profile updated');
+      setEditing(false);
+    } catch (err) {
+      toast.error((err as Error).message || 'Could not save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const myReviews = reviews.filter(r => r.customerEmail === user?.email);
   const completedOrders = orders.filter(o => o.status === 'rated' || o.status === 'to-rate').length;
@@ -68,8 +109,12 @@ export function Profile() {
           <div className="lg:col-span-2 bg-white rounded-2xl border border-pink-100 shadow-sm p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-gray-800 flex items-center gap-2"><User className="w-4 h-4 text-rose-500" /> Personal Information</h2>
-              <Button size="sm" variant="outline" onClick={() => setEditing(!editing)} className="border-rose-200 text-rose-600">
-                {editing ? <><Check className="w-3.5 h-3.5 mr-1" /> Save</> : <><Edit2 className="w-3.5 h-3.5 mr-1" /> Edit</>}
+              <Button size="sm" variant="outline" onClick={() => (editing ? handleSave() : setEditing(true))} disabled={saving} className="border-rose-200 text-rose-600">
+                {editing
+                  ? saving
+                    ? 'Saving…'
+                    : <><Check className="w-3.5 h-3.5 mr-1" /> Save</>
+                  : <><Edit2 className="w-3.5 h-3.5 mr-1" /> Edit</>}
               </Button>
             </div>
             <div className="space-y-4">
@@ -83,7 +128,7 @@ export function Profile() {
                   <div className="w-8 h-8 bg-rose-50 rounded-lg flex items-center justify-center text-rose-500 shrink-0 mt-0.5">{field.icon}</div>
                   <div className="flex-1">
                     <p className="text-xs text-gray-400 mb-1">{field.label}</p>
-                    {editing ? (
+                    {editing && field.key !== 'email' ? (
                       <Input value={field.value} onChange={e => setForm(f => ({ ...f, [field.key]: e.target.value }))} className="border-pink-200 h-8 text-sm" placeholder={`Enter ${field.label.toLowerCase()}`} />
                     ) : (
                       <p className="text-sm font-medium text-gray-800">{field.value || <span className="text-gray-300 italic">Not set</span>}</p>
@@ -118,7 +163,7 @@ export function Profile() {
           <div className="lg:col-span-3 bg-gradient-to-r from-rose-500 to-purple-600 rounded-2xl p-6 text-white flex items-center justify-between">
             <div>
               <p className="text-rose-100 text-sm">Total Spent at Evelina's Flowershop</p>
-              <p className="text-4xl font-bold mt-1">${totalSpent.toFixed(2)}</p>
+              <p className="text-4xl font-bold mt-1">{formatCurrency(totalSpent)}</p>
             </div>
             <div className="text-6xl opacity-20">🌸</div>
           </div>

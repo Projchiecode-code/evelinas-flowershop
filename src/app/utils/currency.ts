@@ -1,7 +1,7 @@
 export const CURRENCY_SYMBOL = '₱';
 export const CURRENCY_CODE = 'PHP';
 
-export function formatPrice(amount: number): string {
+export function formatCurrency(amount: number): string {
   return `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 

@@ -18,20 +18,33 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
-    if (saved) {
-      try {
-        setFavorites(JSON.parse(saved));
-      } catch {
-        setFavorites([]);
+    // localStorage can hold corrupt or foreign values (hand-edited, an older
+    // app version, another tab). A non-array here used to crash every page
+    // that maps over favorites, so validate before trusting it.
+    try {
+      const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setFavorites(
+          Array.isArray(parsed)
+            ? parsed.filter((f: unknown) => f && typeof f === 'object')
+            : []
+        );
       }
+    } catch {
+      setFavorites([]);
     }
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
     if (!isLoading) {
-      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
+      try {
+        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
+      } catch {
+        // Storage full or unavailable (private mode) — favorites simply
+        // don't persist for this session.
+      }
     }
   }, [favorites, isLoading]);
 

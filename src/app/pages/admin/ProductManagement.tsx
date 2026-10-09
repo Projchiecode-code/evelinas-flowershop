@@ -6,6 +6,7 @@ import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
 import { useProducts } from '../../contexts/ProductsContext';
 import { Bouquet } from '../../types';
+import { formatCurrency } from '../../utils/currency';
 
 const EMPTY: Omit<Bouquet, 'id'> = {
   name: '', description: '', price: 0, image: '', category: 'Roses',
@@ -123,7 +124,7 @@ export function ProductManagement() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Price ($)</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Price (₱)</label>
               <Input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: Number(e.target.value) }))} className="border-pink-200" />
             </div>
             <div>
@@ -192,7 +193,7 @@ export function ProductManagement() {
                   <td className="p-4 hidden sm:table-cell">
                     <Badge className="bg-purple-100 text-purple-700 border-purple-200">{p.category}</Badge>
                   </td>
-                  <td className="p-4 text-right font-bold text-rose-600">${p.price.toFixed(2)}</td>
+                  <td className="p-4 text-right font-bold text-rose-600">{formatCurrency(p.price)}</td>
                   <td className="p-4 text-center hidden md:table-cell">
                     <button onClick={() => toggleStock(p.id)} className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${p.inStock ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                       {p.inStock ? 'In Stock' : 'Out of Stock'}

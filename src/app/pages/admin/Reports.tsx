@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { TrendingUp, DollarSign, ShoppingBag, Star, Users, Award, Package, Calendar, ChevronDown } from 'lucide-react';
+import { TrendingUp, Banknote, ShoppingBag, Star, Users, Award, Package, Calendar, ChevronDown } from 'lucide-react';
 import { useOrders } from '../../contexts/OrderContext';
 import { useReviews } from '../../contexts/ReviewsContext';
 import { Order } from '../../types';
@@ -321,9 +321,9 @@ export function Reports() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, icon: <DollarSign className="w-5 h-5" />, color: 'from-rose-500 to-pink-600', change: pctChange(totalRevenue, prevRevenue), hint: `vs ${selectedLabel.toLowerCase()} prior period` },
+          { label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, icon: <Banknote className="w-5 h-5" />, color: 'from-rose-500 to-pink-600', change: pctChange(totalRevenue, prevRevenue), hint: `vs ${selectedLabel.toLowerCase()} prior period` },
           { label: 'Total Orders', value: totalOrders.toLocaleString(), icon: <ShoppingBag className="w-5 h-5" />, color: 'from-purple-500 to-violet-600', change: pctChange(totalOrders, prevTotalOrders), hint: `vs ${selectedLabel.toLowerCase()} prior period` },
-          { label: 'Avg Order Value', value: `$${avgOrderValue.toFixed(0)}`, icon: <TrendingUp className="w-5 h-5" />, color: 'from-pink-500 to-rose-600', change: pctChange(avgOrderValue, prevAvgOrderValue), hint: `vs ${selectedLabel.toLowerCase()} prior period` },
+          { label: 'Avg Order Value', value: `₱${avgOrderValue.toFixed(0)}`, icon: <TrendingUp className="w-5 h-5" />, color: 'from-pink-500 to-rose-600', change: pctChange(avgOrderValue, prevAvgOrderValue), hint: `vs ${selectedLabel.toLowerCase()} prior period` },
           { label: 'Avg Rating', value: avgRating > 0 ? avgRating.toFixed(1) + '★' : 'No ratings yet', icon: <Star className="w-5 h-5" />, color: 'from-amber-500 to-orange-500', change: `${approvedReviews.length} review${approvedReviews.length === 1 ? '' : 's'}`, hint: 'across all approved reviews' },
         ].map(kpi => (
           <div key={kpi.label} className={`bg-gradient-to-br ${kpi.color} rounded-2xl p-5 text-white shadow-sm`}>
@@ -358,7 +358,7 @@ export function Reports() {
               <CartesianGrid strokeDasharray="3 3" stroke="#fce7f3" />
               <XAxis dataKey={chartKey === 'day' ? 'day' : 'month'} tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, 'Revenue']} />
+              <Tooltip formatter={(v: number) => [`₱${v.toLocaleString()}`, 'Revenue']} />
               <Area type="monotone" dataKey="revenue" stroke="#f43f5e" fill="url(#areaGrad)" strokeWidth={2.5} dot={{ fill: '#f43f5e', r: 4 }} />
             </AreaChart>
           </ResponsiveContainer>
@@ -403,7 +403,7 @@ export function Reports() {
               <CartesianGrid strokeDasharray="3 3" stroke="#fce7f3" />
               <XAxis dataKey="day" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, 'Revenue']} />
+              <Tooltip formatter={(v: number) => [`₱${v.toLocaleString()}`, 'Revenue']} />
               <Bar dataKey="revenue" radius={[6, 6, 0, 0]} fill="url(#barGrad2)" />
               <defs>
                 <linearGradient id="barGrad2" x1="0" y1="0" x2="0" y2="1">
@@ -466,7 +466,7 @@ export function Reports() {
                   </td>
                   <td className="p-3 font-semibold text-gray-800">{b.name}</td>
                   <td className="p-3 text-right text-gray-700">{b.orders}</td>
-                  <td className="p-3 text-right font-bold text-rose-600">${b.revenue.toFixed(0)}</td>
+                  <td className="p-3 text-right font-bold text-rose-600">₱{b.revenue.toFixed(0)}</td>
                   <td className="p-3 hidden sm:table-cell">
                     <div className="w-32 bg-gray-100 rounded-full h-2">
                       <div className="bg-gradient-to-r from-rose-500 to-purple-500 h-2 rounded-full" style={{ width: `${bestSellers[0] && bestSellers[0].orders > 0 ? (b.orders / bestSellers[0].orders) * 100 : 0}%` }} />

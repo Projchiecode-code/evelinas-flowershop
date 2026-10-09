@@ -14,6 +14,7 @@ import { useFavorites } from '../contexts/FavoritesContext';
 import { useOrders } from '../contexts/OrderContext';
 import { useReviews } from '../contexts/ReviewsContext';
 import { useGallery } from '../contexts/GalleryContext';
+import { formatCurrency } from '../utils/currency';
 import { useAuth } from '../contexts/AuthContext';
 import { AIRecommendationEngine, buildSignals } from '../utils/aiRecommendations';
 import { recordView, getRecentViews } from '../utils/viewHistory';
@@ -158,7 +159,7 @@ export function BouquetDetail() {
               <Badge className="mb-2 bg-purple-100 text-purple-700 border-purple-200">{bouquet.category}</Badge>
               <h1 className="text-4xl font-bold text-gray-800 mb-2">{bouquet.name}</h1>
               <div className="flex items-center gap-3">
-                <p className="text-3xl font-bold text-rose-600">${bouquet.price.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-rose-600">{formatCurrency(bouquet.price)}</p>
                 {avgRating > 0 && <div className="flex items-center gap-1"><StarRating value={Math.round(avgRating)} /><span className="text-sm text-gray-500">({reviews.length})</span></div>}
               </div>
             </div>

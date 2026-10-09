@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
 import { useCart } from '../contexts/CartContext';
+import { formatCurrency } from '../utils/currency';
 
 export function Cart() {
   const { cart, removeFromCart, updateQuantity, getCartTotal } = useCart();
@@ -108,10 +109,10 @@ export function Cart() {
 
                         <div className="text-right min-w-0">
                           <p className="text-sm text-gray-500 break-words">
-                            ${item.bouquet.price.toFixed(2)} each
+                            {formatCurrency(item.bouquet.price)} each
                           </p>
                           <p className="text-xl font-bold text-purple-600 break-words">
-                            ${(item.bouquet.price * item.quantity).toFixed(2)}
+                            {formatCurrency(item.bouquet.price * item.quantity)}
                           </p>
                         </div>
                       </div>
@@ -131,7 +132,7 @@ export function Cart() {
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal</span>
-                    <span className="font-semibold">${subtotal.toFixed(2)}</span>
+                    <span className="font-semibold">{formatCurrency(subtotal)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Delivery Fee</span>
@@ -139,14 +140,14 @@ export function Cart() {
                       {deliveryFee === 0 ? (
                         <span className="text-green-600">FREE</span>
                       ) : (
-                        `$${deliveryFee.toFixed(2)}`
+                        formatCurrency(deliveryFee)
                       )}
                     </span>
                   </div>
                   
                   {deliveryFee > 0 && (
                     <p className="text-sm text-gray-500">
-                      💡 Spend ${(100 - subtotal).toFixed(2)} more for free delivery!
+                      💡 Spend {formatCurrency(100 - subtotal)} more for free delivery!
                     </p>
                   )}
                   
@@ -155,7 +156,7 @@ export function Cart() {
                   <div className="flex justify-between text-lg">
                     <span className="font-semibold">Total</span>
                     <span className="font-bold text-purple-600">
-                      ${total.toFixed(2)}
+                      {formatCurrency(total)}
                     </span>
                   </div>
                 </div>

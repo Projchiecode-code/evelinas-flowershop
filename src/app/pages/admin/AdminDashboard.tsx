@@ -1,7 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, ShoppingBag, Package, Star, DollarSign, Users } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, Star, Banknote, Users } from 'lucide-react';
 import { useOrders } from '../../contexts/OrderContext';
 import { useProducts } from '../../contexts/ProductsContext';
+import { formatCurrency } from '../../utils/currency';
 
 const PIE_COLORS = ['#f43f5e', '#a855f7', '#ec4899', '#fb7185', '#c084fc'];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,7 +98,7 @@ export function AdminDashboard() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString('en', { maximumFractionDigits: 0 })}`, icon: <DollarSign className="w-5 h-5" />, color: 'from-rose-500 to-pink-500', change: revenueChange, hint: 'last 30 days vs previous 30 days' },
+          { label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString('en', { maximumFractionDigits: 0 })}`, icon: <Banknote className="w-5 h-5" />, color: 'from-rose-500 to-pink-500', change: revenueChange, hint: 'last 30 days vs previous 30 days' },
           { label: 'Total Orders', value: totalOrders, icon: <ShoppingBag className="w-5 h-5" />, color: 'from-purple-500 to-violet-500', change: ordersChange, hint: 'last 30 days vs previous 30 days' },
           { label: 'Active Orders', value: pendingOrders, icon: <Package className="w-5 h-5" />, color: 'from-pink-500 to-rose-400', change: '', hint: '' },
           { label: 'Avg Rating', value: avgRating ? avgRating.toFixed(1) + '★' : 'N/A', icon: <Star className="w-5 h-5" />, color: 'from-fuchsia-500 to-purple-500', change: ratingChange, hint: 'across rated orders' },
@@ -125,7 +126,7 @@ export function AdminDashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#fce7f3" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
+              <Tooltip formatter={(v: number) => [`₱${Number(v).toLocaleString()}`, 'Revenue']} />
               <Bar dataKey="revenue" radius={[6, 6, 0, 0]} fill="url(#barGrad)" />
               <defs>
                 <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
@@ -201,7 +202,7 @@ export function AdminDashboard() {
                     <td className="py-3 font-mono text-xs text-gray-600">{o.id}</td>
                     <td className="py-3 text-gray-800 font-medium">{o.customerName}</td>
                     <td className="py-3 text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</td>
-                    <td className="py-3 text-right font-bold text-rose-600">${(Number(o.total) || 0).toFixed(2)}</td>
+                    <td className="py-3 text-right font-bold text-rose-600">{formatCurrency(Number(o.total) || 0)}</td>
                     <td className="py-3 text-right">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[o.status] || 'bg-gray-100 text-gray-600'}`}>
                         {STATUS_LABEL[o.status] || o.status}

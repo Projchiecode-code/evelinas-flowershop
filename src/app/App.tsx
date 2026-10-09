@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { RouterProvider } from "react-router";
 import { Toaster } from "./components/ui/sonner";
 import { CartProvider } from "./contexts/CartContext";
@@ -10,6 +11,18 @@ import { NotificationsProvider } from "./contexts/NotificationsContext";
 import { ProductsProvider } from "./contexts/ProductsContext";
 import { router } from "./routes";
 
+/** Shown while a lazily-loaded route chunk downloads (routes.tsx). */
+function RouteFallback() {
+  return (
+    <div className="min-h-screen bg-rose-50 flex items-center justify-center">
+      <div className="text-center text-gray-500">
+        <span className="inline-block animate-spin text-3xl mb-3">🌸</span>
+        <p>Loading…</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     /* MARKER-MAKE-KIT-INVOKED */
@@ -21,7 +34,9 @@ export default function App() {
               <CartProvider>
                 <OrderProvider>
                   <ProductsProvider>
-                    <RouterProvider router={router} />
+                    <Suspense fallback={<RouteFallback />}>
+                      <RouterProvider router={router} />
+                    </Suspense>
                     <Toaster position="top-right" richColors />
                   </ProductsProvider>
                 </OrderProvider>

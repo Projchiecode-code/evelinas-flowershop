@@ -1,30 +1,37 @@
 import { createBrowserRouter } from 'react-router';
+import { lazy } from 'react';
 import { Layout } from './components/Layout';
 import { AdminLayout } from './components/AdminLayout';
-import { Home } from './pages/Home';
-import { Catalog } from './pages/Catalog';
-import { BouquetDetail } from './pages/BouquetDetail';
-import { Gallery } from './pages/Gallery';
-import { Cart } from './pages/Cart';
-import { Checkout } from './pages/Checkout';
-import { OrderConfirmation } from './pages/OrderConfirmation';
-import { OrderTracking } from './pages/OrderTracking';
-import { OrderHistory } from './pages/OrderHistory';
-import { AIRecommendations } from './pages/AIRecommendations';
-import { Favorites } from './pages/Favorites';
-import { Profile } from './pages/Profile';
-import { Login } from './pages/Login';
-import { Register } from './pages/Register';
-import { ForgotPassword } from './pages/ForgotPassword';
-import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { ProductManagement } from './pages/admin/ProductManagement';
-import { OrderManagement } from './pages/admin/OrderManagement';
-import { RecommendationManagement } from './pages/admin/RecommendationManagement';
-import { ReviewsManagement } from './pages/admin/ReviewsManagement';
-import { GalleryManagement } from './pages/admin/GalleryManagement';
-import { NotificationManagement } from './pages/admin/NotificationManagement';
-import { Reports } from './pages/admin/Reports';
-import { NotFound } from './pages/NotFound';
+
+// Every page is code-split: the first paint downloads only the shell (header,
+// contexts, cart) plus the current route's chunk, instead of one ~1.1 MB
+// bundle that tripped Vite's 500 kB chunk warning on every build. Pages are
+// named exports, so adapt each for React.lazy's default export; App.tsx wraps
+// <RouterProvider> in <Suspense> to cover the chunk-load gap.
+const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const Catalog = lazy(() => import('./pages/Catalog').then(m => ({ default: m.Catalog })));
+const BouquetDetail = lazy(() => import('./pages/BouquetDetail').then(m => ({ default: m.BouquetDetail })));
+const Gallery = lazy(() => import('./pages/Gallery').then(m => ({ default: m.Gallery })));
+const Cart = lazy(() => import('./pages/Cart').then(m => ({ default: m.Cart })));
+const Checkout = lazy(() => import('./pages/Checkout').then(m => ({ default: m.Checkout })));
+const OrderConfirmation = lazy(() => import('./pages/OrderConfirmation').then(m => ({ default: m.OrderConfirmation })));
+const OrderTracking = lazy(() => import('./pages/OrderTracking').then(m => ({ default: m.OrderTracking })));
+const OrderHistory = lazy(() => import('./pages/OrderHistory').then(m => ({ default: m.OrderHistory })));
+const AIRecommendations = lazy(() => import('./pages/AIRecommendations').then(m => ({ default: m.AIRecommendations })));
+const Favorites = lazy(() => import('./pages/Favorites').then(m => ({ default: m.Favorites })));
+const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Register = lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
+const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const ProductManagement = lazy(() => import('./pages/admin/ProductManagement').then(m => ({ default: m.ProductManagement })));
+const OrderManagement = lazy(() => import('./pages/admin/OrderManagement').then(m => ({ default: m.OrderManagement })));
+const RecommendationManagement = lazy(() => import('./pages/admin/RecommendationManagement').then(m => ({ default: m.RecommendationManagement })));
+const ReviewsManagement = lazy(() => import('./pages/admin/ReviewsManagement').then(m => ({ default: m.ReviewsManagement })));
+const GalleryManagement = lazy(() => import('./pages/admin/GalleryManagement').then(m => ({ default: m.GalleryManagement })));
+const NotificationManagement = lazy(() => import('./pages/admin/NotificationManagement').then(m => ({ default: m.NotificationManagement })));
+const Reports = lazy(() => import('./pages/admin/Reports').then(m => ({ default: m.Reports })));
 
 export const router = createBrowserRouter([
   {

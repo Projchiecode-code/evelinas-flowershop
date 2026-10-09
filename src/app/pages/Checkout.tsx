@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { productApi } from '../api/client';
 import { toast } from 'sonner';
 import { CartItem, PaymentMethod } from '../types';
+import { formatCurrency } from '../utils/currency';
 
 /** Where a signed-out shopper goes to sign in, and back to checkout afterwards. */
 const LOGIN_PATH = '/login?redirect=/checkout';
@@ -393,7 +394,7 @@ export function Checkout() {
                             <p className="font-semibold text-sm text-gray-800 truncate">{item.bouquet.name}</p>
                             <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                           </div>
-                          <p className="font-bold text-rose-600 text-sm shrink-0">${(item.bouquet.price * item.quantity).toFixed(2)}</p>
+                          <p className="font-bold text-rose-600 text-sm shrink-0">{formatCurrency(item.bouquet.price * item.quantity)}</p>
                         </div>
                       ))}
                     </div>
@@ -403,11 +404,11 @@ export function Checkout() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-600">
                         <span>Subtotal</span>
-                        <span>${subtotal.toFixed(2)}</span>
+                        <span>{formatCurrency(subtotal)}</span>
                       </div>
                       <div className="flex justify-between text-gray-600">
                         <span>Delivery</span>
-                        <span>{deliveryFee === 0 ? <span className="text-green-600 font-semibold">FREE</span> : `$${deliveryFee.toFixed(2)}`}</span>
+                        <span>{deliveryFee === 0 ? <span className="text-green-600 font-semibold">FREE</span> : formatCurrency(deliveryFee)}</span>
                       </div>
                       <div className="flex justify-between items-center py-1">
                         <span className="text-xs text-gray-500">Payment</span>
@@ -418,7 +419,7 @@ export function Checkout() {
                       <Separator className="bg-pink-100" />
                       <div className="flex justify-between font-bold text-lg">
                         <span>Total</span>
-                        <span className="text-rose-600">${total.toFixed(2)}</span>
+                        <span className="text-rose-600">{formatCurrency(total)}</span>
                       </div>
                     </div>
 

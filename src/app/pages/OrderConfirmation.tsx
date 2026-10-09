@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { useOrders } from '../contexts/OrderContext';
 import { Order } from '../types';
+import { formatCurrency } from '../utils/currency';
 import confetti from 'canvas-confetti';
 
 export function OrderConfirmation() {
@@ -96,13 +97,13 @@ export function OrderConfirmation() {
               <div>
                 <p className="text-sm text-gray-600">Items</p>
                 <div className="space-y-2 mt-2">
-                  {order.items.map(item => (
-                    <div key={item.bouquet.id} className="flex justify-between">
+                  {order.items.map((item, i) => (
+                    <div key={item.bouquet?.id || i} className="flex justify-between">
                       <span className="text-sm">
-                        {item.bouquet.name} x {item.quantity}
+                        {item.bouquet?.name || 'Product no longer available'} x {item.quantity}
                       </span>
                       <span className="text-sm font-semibold">
-                        ${(item.bouquet.price * item.quantity).toFixed(2)}
+                        {formatCurrency((item.bouquet?.price ?? item.price ?? 0) * item.quantity)}
                       </span>
                     </div>
                   ))}
@@ -112,7 +113,7 @@ export function OrderConfirmation() {
               <div className="pt-2 border-t">
                 <div className="flex justify-between font-bold">
                   <span>Total</span>
-                  <span className="text-purple-600">${order.total.toFixed(2)}</span>
+                  <span className="text-purple-600">{formatCurrency(order.total)}</span>
                 </div>
               </div>
             </CardContent>

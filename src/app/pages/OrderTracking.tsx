@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { useOrders } from '../contexts/OrderContext';
 import { Order, OrderStatus } from '../types';
+import { formatCurrency } from '../utils/currency';
 
 type Tab = 'to-pay' | 'to-ship' | 'to-receive' | 'to-rate';
 
@@ -175,13 +176,17 @@ function OrderCard({ order, tab }: { order: Order; tab: Tab }) {
             <div className="space-y-3">
               {order.items.map((item, i) => (
                 <div key={i} className="flex items-center gap-3">
-                  <img src={item.bouquet.image} alt={item.bouquet.name} className="w-14 h-14 rounded-xl object-cover border border-pink-100" />
+                  {item.bouquet?.image ? (
+                    <img src={item.bouquet.image} alt={item.bouquet.name} className="w-14 h-14 rounded-xl object-cover border border-pink-100" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-pink-50 border border-dashed border-pink-200 flex items-center justify-center text-lg shrink-0">🌸</div>
+                  )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm truncate">{item.bouquet.name}</p>
+                    <p className="font-semibold text-gray-800 text-sm truncate">{item.bouquet?.name || 'Product no longer available'}</p>
                     <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                     {item.customMessage && <p className="text-xs text-purple-600 italic mt-0.5">💌 "{item.customMessage}"</p>}
                   </div>
-                  <p className="font-bold text-rose-600 text-sm shrink-0">${(item.bouquet.price * item.quantity).toFixed(2)}</p>
+                  <p className="font-bold text-rose-600 text-sm shrink-0">{formatCurrency((item.bouquet?.price ?? item.price ?? 0) * item.quantity)}</p>
                 </div>
               ))}
             </div>
@@ -222,7 +227,7 @@ function OrderCard({ order, tab }: { order: Order; tab: Tab }) {
                 </button>
               )}
             </div>
-            <p className="font-bold text-rose-600">${order.total.toFixed(2)}</p>
+            <p className="font-bold text-rose-600">{formatCurrency(order.total)}</p>
           </div>
 
           {/* Tab-specific actions */}

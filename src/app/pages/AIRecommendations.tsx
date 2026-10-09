@@ -10,6 +10,7 @@ import { useReviews } from '../contexts/ReviewsContext';
 import { useOrders } from '../contexts/OrderContext';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { getRecentViews } from '../utils/viewHistory';
+import { formatCurrency } from '../utils/currency';
 import {
   buildSignals,
   applySignals,
@@ -42,9 +43,9 @@ const STEPS: Step[] = [
     id: 'budget',
     question: 'What is your budget?',
     options: [
-      { label: 'Under $75', value: 'low', emoji: '💚' },
-      { label: '$75 – $99', value: 'medium', emoji: '💛' },
-      { label: '$100 – $120', value: 'high', emoji: '🧡' },
+      { label: 'Under ₱75', value: 'low', emoji: '💚' },
+      { label: '₱75 – ₱99', value: 'medium', emoji: '💛' },
+      { label: '₱100 – ₱120', value: 'high', emoji: '🧡' },
       { label: 'No limit', value: 'any', emoji: '💜' },
     ],
   },
@@ -384,7 +385,7 @@ export function AIRecommendations() {
                   <div className="p-5">
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="font-bold text-gray-800">{b.name}</h3>
-                      <span className="font-bold text-rose-600">${b.price.toFixed(2)}</span>
+                      <span className="font-bold text-rose-600">{formatCurrency(b.price)}</span>
                     </div>
                     <p className="text-sm text-gray-500 mb-3 line-clamp-2">{b.description}</p>
                     <div className="flex flex-wrap gap-1 mb-4">

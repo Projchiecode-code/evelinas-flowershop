@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { Search, SlidersHorizontal, X, Filter } from 'lucide-react';
 import { BouquetCard } from '../components/BouquetCard';
@@ -13,19 +13,44 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../components/ui/sheet';
 
 export function Catalog() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { bouquets } = useProducts();
   const categories = useMemo(() => Array.from(new Set(bouquets.map(b => b.category))), [bouquets]);
   const occasions = useMemo(() => Array.from(new Set(bouquets.flatMap(b => b.occasion))), [bouquets]);
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    searchParams.get('category') ? [searchParams.get('category')!] : []
+    (searchParams.get('category') || '').split(',').filter(Boolean)
   );
   const [selectedOccasions, setSelectedOccasions] = useState<string[]>(
-    searchParams.get('occasion') ? [searchParams.get('occasion')!] : []
+    (searchParams.get('occasion') || '').split(',').filter(Boolean)
   );
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 150]);
   const [sortBy, setSortBy] = useState('popularity');
+
+  // Write the active filters into the query string (replace, not push, so
+  // typing doesn't spam history) — a filtered catalog becomes shareable and
+  // survives refresh.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (search) next.set('search', search);
+    if (selectedCategories.length) next.set('category', selectedCategories.join(','));
+    if (selectedOccasions.length) next.set('occasion', selectedOccasions.join(','));
+    setSearchParams(next, { replace: true });
+  }, [search, selectedCategories, selectedOccasions, setSearchParams]);
+
+  // And read external changes back in (e.g. the header search box navigating
+  // to /catalog?search=… while this component stays mounted). Only state that
+  // differs is touched, so this settles instead of looping with the effect
+  // above.
+  useEffect(() => {
+    const urlSearch = searchParams.get('search') || '';
+    const urlCategories = (searchParams.get('category') || '').split(',').filter(Boolean);
+    const urlOccasions = (searchParams.get('occasion') || '').split(',').filter(Boolean);
+    if (urlSearch !== search) setSearch(urlSearch);
+    if (urlCategories.join(',') !== selectedCategories.join(',')) setSelectedCategories(urlCategories);
+    if (urlOccasions.join(',') !== selectedOccasions.join(',')) setSelectedOccasions(urlOccasions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const filtered = useMemo(() => {
     let list = [...bouquets];
@@ -90,7 +115,7 @@ export function Catalog() {
       </div>
       <div>
         <h3 className="font-semibold text-gray-800 mb-3">
-          Price: <span className="text-rose-600">${priceRange[0]} – ${priceRange[1]}</span>
+          Price: <span className="text-rose-600">₱{priceRange[0]} – ₱{priceRange[1]}</span>
         </h3>
         <Slider min={0} max={150} step={5} value={priceRange} onValueChange={v => setPriceRange(v as [number, number])} className="[&_[role=slider]]:bg-rose-500 [&_[role=slider]]:border-rose-500" />
       </div>

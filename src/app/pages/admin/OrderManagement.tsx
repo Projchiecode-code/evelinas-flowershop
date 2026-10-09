@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown, ChevronUp, Package, CreditCard, Truck, Star, CheckCircle, XCircle, ImageIcon, Eye, ArrowRight } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
@@ -6,6 +7,7 @@ import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { useOrders } from '../../contexts/OrderContext';
 import { Order, OrderStatus } from '../../types';
+import { formatCurrency } from '../../utils/currency';
 
 const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All Orders' },
@@ -65,11 +67,15 @@ function OrderRow({ order }: { order: Order }) {
 
   return (
     <>
-      {showProof && order.paymentProof && (
-        <ProofModal src={order.paymentProof} onClose={() => setShowProof(false)} />
+      {/* Modals are portaled to <body>: as direct children of <tbody> they
+          were invalid DOM (divs inside a table) that the browser may
+          reparent out from under React. */}
+      {showProof && order.paymentProof && createPortal(
+        <ProofModal src={order.paymentProof} onClose={() => setShowProof(false)} />,
+        document.body
       )}
 
-      {confirmAdvance && (
+      {confirmAdvance && createPortal(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
             <h3 className="font-bold text-gray-800 mb-2">Confirm Status Change</h3>
@@ -82,7 +88,8 @@ function OrderRow({ order }: { order: Order }) {
               <Button onClick={() => handleAdvance(confirmAdvance)} className="flex-1 bg-gradient-to-r from-rose-500 to-purple-500 text-white">Confirm</Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <tr className="border-b border-rose-50 hover:bg-rose-50/30 transition-colors cursor-pointer" onClick={() => setExpanded(!expanded)}>
@@ -97,7 +104,7 @@ function OrderRow({ order }: { order: Order }) {
             <div className="text-xs text-purple-600">{PAYMENT_LABEL[order.paymentMethod] || order.paymentMethod}</div>
           )}
         </td>
-        <td className="p-4 text-right font-bold text-rose-600">${order.total.toFixed(2)}</td>
+        <td className="p-4 text-right font-bold text-rose-600">{formatCurrency(order.total)}</td>
         <td className="p-4">
           <Badge className={`border flex items-center gap-1 w-fit ml-auto ${cfg.color}`}>
             {cfg.icon} {cfg.label}
@@ -168,12 +175,16 @@ function OrderRow({ order }: { order: Order }) {
                 <div className="space-y-2">
                   {order.items.map((item, i) => (
                     <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-pink-100">
-                      {item.bouquet.image && <img src={item.bouquet.image} className="w-10 h-10 rounded-lg object-cover" alt="" />}
+                      {item.bouquet?.image ? (
+                        <img src={item.bouquet.image} className="w-10 h-10 rounded-lg object-cover" alt="" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-pink-50 border border-dashed border-pink-200 flex items-center justify-center text-sm shrink-0">🌸</div>
+                      )}
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-800">{item.bouquet.name}</p>
+                        <p className="text-sm font-semibold text-gray-800">{item.bouquet?.name || 'Product no longer available'}</p>
                         <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
                       </div>
-                      <p className="font-bold text-rose-600 text-sm">${(item.bouquet.price * item.quantity).toFixed(2)}</p>
+                      <p className="font-bold text-rose-600 text-sm">{formatCurrency((item.bouquet?.price ?? item.price ?? 0) * item.quantity)}</p>
                     </div>
                   ))}
                 </div>

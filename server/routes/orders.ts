@@ -149,7 +149,7 @@ router.post('/', authenticate, async (req: any, res) => {
     await notify(
       req.userId,
       'Order placed 🌸',
-      `We've received your order ${orderId} — $${Number(total).toFixed(2)}. We'll notify you as it moves along.`,
+      `We've received your order ${orderId} — ₱${Number(total).toFixed(2)}. We'll notify you as it moves along.`,
       `/order-confirmation/${orderId}`
     );
     const admins = await User.find({ role: 'admin' }).select('_id');
@@ -157,7 +157,7 @@ router.post('/', authenticate, async (req: any, res) => {
       notify(
         String(admin._id),
         'New order received 🛍️',
-        `${customerName} placed order ${orderId} — $${Number(total).toFixed(2)} (${itemCount} item${itemCount === 1 ? '' : 's'}).`,
+        `${customerName} placed order ${orderId} — ₱${Number(total).toFixed(2)} (${itemCount} item${itemCount === 1 ? '' : 's'}).`,
         '/admin/orders'
       )
     ));

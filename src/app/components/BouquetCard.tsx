@@ -6,6 +6,7 @@ import { Badge } from './ui/badge';
 import { Link } from 'react-router';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { toast } from 'sonner';
+import { formatCurrency } from '../utils/currency';
 
 interface BouquetCardProps {
   bouquet: Bouquet;
@@ -75,7 +76,7 @@ export function BouquetCard({ bouquet, showRecommendation, recommendationText }:
       </CardContent>
 
       <CardFooter className="pt-0 flex items-center justify-between">
-        <p className="text-2xl font-bold text-rose-600">${bouquet.price.toFixed(2)}</p>
+        <p className="text-2xl font-bold text-rose-600">{formatCurrency(bouquet.price)}</p>
         <Link to={`/bouquet/${bouquet.id}`}>
           <Button disabled={!bouquet.inStock} className="bg-rose-500 hover:bg-rose-600 text-white">
             <ShoppingCart className="w-4 h-4 mr-2" />

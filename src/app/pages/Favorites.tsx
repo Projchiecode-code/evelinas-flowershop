@@ -5,6 +5,7 @@ import { Badge } from '../components/ui/badge';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { useCart } from '../contexts/CartContext';
 import { toast } from 'sonner';
+import { formatCurrency } from '../utils/currency';
 
 export function Favorites() {
   const { favorites, removeFavorite } = useFavorites();
@@ -107,7 +108,7 @@ export function Favorites() {
                       ))}
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="text-xl font-bold text-rose-600">${bouquet.price.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-rose-600">{formatCurrency(bouquet.price)}</p>
                       <Button
                         size="sm"
                         disabled={!bouquet.inStock}
