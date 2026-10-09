@@ -1,7 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, ShoppingBag, Package, Star, DollarSign, Users } from 'lucide-react';
 import { useOrders } from '../../contexts/OrderContext';
-import { bouquets } from '../../data/bouquets';
+import { useProducts } from '../../contexts/ProductsContext';
 
 const PIE_COLORS = ['#f43f5e', '#a855f7', '#ec4899', '#fb7185', '#c084fc'];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -19,6 +19,7 @@ const pctChange = (current: number, previous: number) => {
 
 export function AdminDashboard() {
   const { orders } = useOrders();
+  const { bouquets } = useProducts();
 
   const totalRevenue = revenueOf(orders);
   const totalOrders = orders.length;

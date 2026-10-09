@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Order, OrderStatus, OrderPayload } from '../types';
 import { orderApi } from '../api/client';
+import { useAuth } from './AuthContext';
 
 interface OrderContextType {
   orders: Order[];
@@ -50,8 +51,9 @@ export function normalizeOrder(raw: any): Order {
 export function OrderProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setIsLoading(true);
       const data = await orderApi.getAll();
@@ -62,11 +64,19 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchOrders();
   }, []);
+
+  // Only hit /orders for signed-in users — the endpoint is authenticated, so
+  // anonymous visits used to log a 401 for every page load.
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (!isAuthenticated) {
+      setOrders([]);
+      setIsLoading(false);
+      return;
+    }
+    fetchOrders();
+  }, [isAuthLoading, isAuthenticated, fetchOrders]);
 
   const createOrder = async (orderData: OrderPayload) => {
     const res = await orderApi.create(orderData);

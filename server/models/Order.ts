@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 
 const orderSchema = new mongoose.Schema({
+  // Orders use a human-readable primary key (`ORD-<timestamp>-<random>`) that
+  // the API generates — without this Mongoose would default _id to ObjectId and
+  // reject it ("Cast to ObjectId failed for value ORD-…").
+  _id: { type: String },
   items: [{
     bouquet: { type: mongoose.Schema.Types.ObjectId, ref: 'Bouquet', required: true },
     quantity: { type: Number, required: true, min: 1 },

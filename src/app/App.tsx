@@ -7,6 +7,7 @@ import { FavoritesProvider } from "./contexts/FavoritesContext";
 import { ReviewsProvider } from "./contexts/ReviewsContext";
 import { GalleryProvider } from "./contexts/GalleryContext";
 import { NotificationsProvider } from "./contexts/NotificationsContext";
+import { ProductsProvider } from "./contexts/ProductsContext";
 import { router } from "./routes";
 
 export default function App() {
@@ -19,8 +20,10 @@ export default function App() {
             <GalleryProvider>
               <CartProvider>
                 <OrderProvider>
-                  <RouterProvider router={router} />
-                  <Toaster position="top-right" richColors />
+                  <ProductsProvider>
+                    <RouterProvider router={router} />
+                    <Toaster position="top-right" richColors />
+                  </ProductsProvider>
                 </OrderProvider>
               </CartProvider>
             </GalleryProvider>

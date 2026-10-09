@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AppNotification } from '../types';
 import { notificationApi } from '../api/client';
+import { useAuth } from './AuthContext';
 
 interface NotificationsContextType {
   notifications: AppNotification[];
@@ -18,29 +19,38 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await notificationApi.getAll();
-      setNotifications(data);
+      const data = (await notificationApi.getAll()) as AppNotification[];
+      setNotifications(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
       setNotifications([]);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
   }, []);
+
+  // /notifications requires a session cookie — skip it while signed out so
+  // anonymous visits don't log a 401 on every page load.
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (!isAuthenticated) {
+      setNotifications([]);
+      setIsLoading(false);
+      return;
+    }
+    fetchNotifications();
+  }, [isAuthLoading, isAuthenticated, fetchNotifications]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const addNotification = async (data: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
     try {
-      const res = await notificationApi.create(data);
+      const res = (await notificationApi.create(data)) as AppNotification;
       setNotifications(prev => [res, ...prev]);
     } catch (err) {
       console.error('Add notification failed:', err);

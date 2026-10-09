@@ -4,7 +4,8 @@ import { Sparkles, ChevronRight, RotateCcw, ShoppingCart, Star } from 'lucide-re
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { BouquetCard } from '../components/BouquetCard';
-import { bouquets } from '../data/bouquets';
+import { getCatalog } from '../data/catalog';
+import { useProducts } from '../contexts/ProductsContext';
 import { Bouquet } from '../types';
 
 interface Step {
@@ -124,7 +125,7 @@ function scoreRule(bouquet: Bouquet, answers: Record<string, string>): { score: 
 }
 
 function getRecommendations(answers: Record<string, string>): RecommendedBouquet[] {
-  return bouquets
+  return getCatalog()
     .map(b => {
       const { score, reasons } = scoreRule(b, answers);
       return { ...b, score, reasons };
@@ -134,6 +135,8 @@ function getRecommendations(answers: Record<string, string>): RecommendedBouquet
 }
 
 export function AIRecommendations() {
+  // Subscribes to the live catalog so results refresh if it is still loading.
+  useProducts();
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<RecommendedBouquet[] | null>(null);

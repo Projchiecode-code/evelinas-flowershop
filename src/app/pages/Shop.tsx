@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { Filter, SlidersHorizontal } from 'lucide-react';
 import { BouquetCard } from '../components/BouquetCard';
-import { bouquets } from '../data/bouquets';
+import { useProducts } from '../contexts/ProductsContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -25,6 +25,7 @@ import {
 } from '../components/ui/select';
 
 export function Shop() {
+  const { bouquets } = useProducts();
   const [searchParams] = useSearchParams();
   const initialOccasion = searchParams.get('occasion') || '';
   const initialSearch = searchParams.get('search') || '';
@@ -88,7 +89,7 @@ export function Shop() {
     });
 
     return filtered;
-  }, [searchQuery, selectedCategories, selectedOccasions, priceRange, sortBy]);
+  }, [bouquets, searchQuery, selectedCategories, selectedOccasions, priceRange, sortBy]);
 
   const toggleCategory = (category: string) => {
     setSelectedCategories(prev =>

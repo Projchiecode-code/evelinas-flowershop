@@ -1,5 +1,5 @@
 import { Bouquet, UserPreferences } from '../types';
-import { bouquets } from '../data/bouquets';
+import { getCatalog } from '../data/catalog';
 
 export interface RecommendationReason {
   type: 'occasion' | 'preference' | 'popular' | 'price' | 'trending';
@@ -26,7 +26,7 @@ export class AIRecommendationEngine {
   ): RecommendedBouquet[] {
     const recommendations: RecommendedBouquet[] = [];
 
-    for (const bouquet of bouquets) {
+    for (const bouquet of getCatalog()) {
       let score = 0;
       const reasons: RecommendationReason[] = [];
 
@@ -80,7 +80,7 @@ export class AIRecommendationEngine {
       if (viewedBouquets.includes(bouquet.id)) {
         score -= 10; // Reduce score for already viewed items
       } else if (viewedBouquets.length > 0) {
-        const viewedCategories = bouquets
+        const viewedCategories = getCatalog()
           .filter(b => viewedBouquets.includes(b.id))
           .map(b => b.category);
         
@@ -119,7 +119,7 @@ export class AIRecommendationEngine {
    * Get recommendations for a specific occasion
    */
   static getOccasionRecommendations(occasion: string, limit: number = 4): RecommendedBouquet[] {
-    return bouquets
+    return getCatalog()
       .filter(b => b.occasion.includes(occasion))
       .map(bouquet => ({
         ...bouquet,
@@ -143,10 +143,10 @@ export class AIRecommendationEngine {
    * Get "Customers also bought" recommendations
    */
   static getSimilarBouquets(bouquetId: string, limit: number = 4): RecommendedBouquet[] {
-    const bouquet = bouquets.find(b => b.id === bouquetId);
+    const bouquet = getCatalog().find(b => b.id === bouquetId);
     if (!bouquet) return [];
 
-    return bouquets
+    return getCatalog()
       .filter(b => b.id !== bouquetId)
       .map(b => {
         let score = 0;
@@ -220,7 +220,7 @@ export class AIRecommendationEngine {
   static getSearchRecommendations(query: string): Bouquet[] {
     const lowerQuery = query.toLowerCase();
     
-    return bouquets.filter(bouquet => {
+    return getCatalog().filter(bouquet => {
       return (
         bouquet.name.toLowerCase().includes(lowerQuery) ||
         bouquet.category.toLowerCase().includes(lowerQuery) ||

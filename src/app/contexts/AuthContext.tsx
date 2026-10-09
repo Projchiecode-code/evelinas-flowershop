@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await authApi.me();
+        const res = (await authApi.me()) as User;
         setUser(res);
       } catch {
         setUser(null);
@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const res = await authApi.login({ email, password });
+      const res = (await authApi.login({ email, password })) as { user: User };
       setUser(res.user);
       return { success: true };
     } catch (err: any) {
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (name: string, email: string, password: string) => {
     try {
-      const res = await authApi.register({ name, email, password });
+      const res = (await authApi.register({ name, email, password })) as { user: User };
       setUser(res.user);
       return { success: true };
     } catch (err: any) {

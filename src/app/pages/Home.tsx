@@ -3,7 +3,7 @@ import { Sparkles, Truck, Shield, Star, ArrowRight, Flower2, Camera, Quote } fro
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { BouquetCard } from '../components/BouquetCard';
-import { bouquets } from '../data/bouquets';
+import { useProducts } from '../contexts/ProductsContext';
 import { useGallery } from '../contexts/GalleryContext';
 import { useReviews } from '../contexts/ReviewsContext';
 
@@ -26,6 +26,7 @@ const OCCASIONS = [
 ];
 
 export function Home() {
+  const { bouquets } = useProducts();
   const trending = bouquets.filter(b => b.popularity >= 92).slice(0, 4);
   const { getFeaturedPhotos } = useGallery();
   const { getApprovedReviews } = useReviews();

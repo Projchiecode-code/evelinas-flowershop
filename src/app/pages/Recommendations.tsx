@@ -7,10 +7,13 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Slider } from '../components/ui/slider';
 import { BouquetCard } from '../components/BouquetCard';
 import { AIRecommendationEngine } from '../utils/aiRecommendations';
+import { useProducts } from '../contexts/ProductsContext';
 import { UserPreferences } from '../types';
 import { Badge } from '../components/ui/badge';
 
 export function Recommendations() {
+  // Subscribes to the live catalog so the lists below re-render when it loads.
+  useProducts();
   const [preferences, setPreferences] = useState<UserPreferences>({
     favoriteColors: [],
     occasions: [],

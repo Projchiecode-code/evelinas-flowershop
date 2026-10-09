@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, Search, Package, X, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, X, Check, Loader2, WifiOff } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
-import { bouquets as initialBouquets } from '../../data/bouquets';
+import { toast } from 'sonner';
+import { useProducts } from '../../contexts/ProductsContext';
 import { Bouquet } from '../../types';
 
 const EMPTY: Omit<Bouquet, 'id'> = {
@@ -14,40 +15,71 @@ const EMPTY: Omit<Bouquet, 'id'> = {
 const CATEGORIES = ['Roses', 'Lilies', 'Tulips', 'Sunflowers', 'Orchids', 'Peonies', 'Mixed'];
 
 export function ProductManagement() {
-  const [products, setProducts] = useState<Bouquet[]>(initialBouquets);
+  const { bouquets, isLoading, isOffline, createProduct, updateProduct, deleteProduct } = useProducts();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Bouquet | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<Omit<Bouquet, 'id'>>(EMPTY);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const filtered = products.filter(p =>
+  const filtered = bouquets.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.category.toLowerCase().includes(search.toLowerCase())
   );
 
   const startAdd = () => { setAdding(true); setEditing(null); setForm(EMPTY); };
-  const startEdit = (p: Bouquet) => { setEditing(p); setAdding(false); setForm({ ...p }); };
+  const startEdit = (p: Bouquet) => {
+    const { id, ...rest } = p;
+    setEditing(p); setAdding(false); setForm(rest);
+  };
   const cancelForm = () => { setAdding(false); setEditing(null); };
 
-  const saveProduct = () => {
-    if (!form.name.trim()) return;
-    if (adding) {
-      const newP: Bouquet = { ...form, id: `prod-${Date.now()}` };
-      setProducts(prev => [newP, ...prev]);
-    } else if (editing) {
-      setProducts(prev => prev.map(p => p.id === editing.id ? { ...form, id: editing.id } : p));
+  // Every mutation writes to the API first, then ProductsContext refreshes the
+  // shared list — so edits show up on the storefront immediately.
+  const saveProduct = async () => {
+    if (!form.name.trim()) {
+      toast.error('Product name is required.');
+      return;
     }
-    cancelForm();
+    setSaving(true);
+    try {
+      if (adding) {
+        await createProduct(form);
+        toast.success(`"${form.name}" added to the catalog.`);
+      } else if (editing) {
+        await updateProduct(editing.id, form);
+        toast.success('Product updated.');
+      }
+      cancelForm();
+    } catch (err) {
+      console.error('Save product failed:', err);
+      toast.error('Could not save the product — the API did not respond.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const deleteProduct = (id: string) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
-    setDeleteId(null);
+  const confirmDelete = async (id: string, name: string) => {
+    try {
+      await deleteProduct(id);
+      setDeleteId(null);
+      toast.success(`"${name}" removed from the catalog.`);
+    } catch (err) {
+      console.error('Delete product failed:', err);
+      toast.error('Could not delete the product.');
+    }
   };
 
-  const toggleStock = (id: string) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, inStock: !p.inStock } : p));
+  const toggleStock = async (id: string) => {
+    const product = bouquets.find(p => p.id === id);
+    if (!product) return;
+    try {
+      await updateProduct(id, { ...product, inStock: !product.inStock });
+    } catch (err) {
+      console.error('Toggle stock failed:', err);
+      toast.error('Could not update stock status.');
+    }
   };
 
   return (
@@ -55,12 +87,22 @@ export function ProductManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Product Management</h1>
-          <p className="text-gray-500 text-sm">{products.length} products in catalog</p>
+          <p className="text-gray-500 text-sm">
+            {bouquets.length} products in catalog
+            {isLoading && <span className="text-rose-500"> · syncing with database…</span>}
+          </p>
         </div>
         <Button onClick={startAdd} className="bg-gradient-to-r from-rose-500 to-purple-500 hover:from-rose-600 hover:to-purple-600 text-white">
           <Plus className="w-4 h-4 mr-2" /> Add Product
         </Button>
       </div>
+
+      {isOffline && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          <WifiOff className="w-4 h-4 shrink-0" />
+          Can&apos;t reach the API — showing the bundled catalog. Saving will fail until the connection is restored.
+        </div>
+      )}
 
       {/* Add/Edit Form */}
       {(adding || editing) && (
@@ -107,9 +149,10 @@ export function ProductManagement() {
               <span className="text-sm text-gray-700">In Stock</span>
             </label>
             <div className="flex-1" />
-            <Button variant="outline" onClick={cancelForm} className="border-gray-200">Cancel</Button>
-            <Button onClick={saveProduct} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
-              <Check className="w-4 h-4 mr-2" /> {adding ? 'Add Product' : 'Save Changes'}
+            <Button variant="outline" onClick={cancelForm} className="border-gray-200" disabled={saving}>Cancel</Button>
+            <Button onClick={saveProduct} disabled={saving} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+              {saving ? 'Saving…' : adding ? 'Add Product' : 'Save Changes'}
             </Button>
           </div>
         </div>
@@ -162,7 +205,7 @@ export function ProductManagement() {
                       </button>
                       {deleteId === p.id ? (
                         <div className="flex items-center gap-1">
-                          <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded-lg bg-red-500 text-white text-xs font-bold">Delete?</button>
+                          <button onClick={() => confirmDelete(p.id, p.name)} className="p-1.5 rounded-lg bg-red-500 text-white text-xs font-bold">Delete?</button>
                           <button onClick={() => setDeleteId(null)} className="p-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs">No</button>
                         </div>
                       ) : (

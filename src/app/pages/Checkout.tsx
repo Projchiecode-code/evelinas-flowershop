@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { CreditCard, MapPin, User, Upload, Banknote, Wallet, Truck, X, ImageIcon } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -8,8 +8,60 @@ import { Label } from '../components/ui/label';
 import { Separator } from '../components/ui/separator';
 import { useCart } from '../contexts/CartContext';
 import { useOrders } from '../contexts/OrderContext';
+import { productApi } from '../api/client';
 import { toast } from 'sonner';
-import { PaymentMethod } from '../types';
+import { CartItem, PaymentMethod } from '../types';
+
+/** Error whose message is safe to show to the customer. */
+class CheckoutError extends Error {}
+
+const OBJECT_ID = /^[0-9a-f]{24}$/i;
+
+/**
+ * The storefront catalogue uses local ids ("1".."8"), while the products seeded
+ * into MongoDB carry their own ObjectIds. POST /orders runs
+ * `Bouquet.findById(item.bouquet)`, so a local id makes the request 500
+ * ("Cast to ObjectId failed"). Translate local ids to the database ids first.
+ */
+async function buildOrderItems(cart: CartItem[]) {
+  const byName = new Map<string, string>();
+
+  if (cart.some(item => !OBJECT_ID.test(item.bouquet.id))) {
+    let products: any[] = [];
+    try {
+      products = (await productApi.getAll()) as any[];
+    } catch {
+      products = [];
+    }
+
+    if (!Array.isArray(products) || products.length === 0) {
+      throw new CheckoutError('Could not reach the product catalog — please refresh the page and try again.');
+    }
+
+    products.forEach(p => {
+      const key = String(p?.name ?? '').trim().toLowerCase();
+      if (key && !byName.has(key)) byName.set(key, String(p._id || p.id || ''));
+    });
+  }
+
+  return Promise.all(
+    cart.map(async item => {
+      const localId = item.bouquet.id;
+      const bouquetId = OBJECT_ID.test(localId) ? localId : byName.get(item.bouquet.name.trim().toLowerCase());
+
+      if (!bouquetId) {
+        throw new CheckoutError(`"${item.bouquet.name}" is no longer available.`);
+      }
+
+      return {
+        bouquet: bouquetId,
+        quantity: item.quantity,
+        customMessage: item.customMessage || '',
+        deliveryDate: item.deliveryDate || '',
+      };
+    })
+  );
+}
 
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: React.ReactNode; desc: string }[] = [
   { value: 'cod', label: 'Cash on Delivery', icon: <Banknote className="w-5 h-5" />, desc: 'Pay when your bouquet arrives' },
@@ -41,6 +93,9 @@ export function Checkout() {
   const [proofFile, setProofFile] = useState<string | null>(null);
   const [proofFileName, setProofFileName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Set once an order exists, so the empty-cart redirect below doesn't race
+  // the navigation to the confirmation page.
+  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -76,14 +131,10 @@ export function Checkout() {
     setSubmitting(true);
     try {
       // The API expects bouquet ids (it re-reads the price from the database),
-      // so map the cart down to plain item references before creating the order.
+      // so translate the cart's local ids before creating the order.
+      const items = await buildOrderItems(cart);
       const orderId = await createOrder({
-        items: cart.map(item => ({
-          bouquet: item.bouquet.id,
-          quantity: item.quantity,
-          customMessage: item.customMessage || '',
-          deliveryDate: item.deliveryDate || '',
-        })),
+        items,
         total,
         status: 'to-pay',
         customerName: formData.fullName,
@@ -95,18 +146,27 @@ export function Checkout() {
         paymentProof: proofFile || undefined,
       });
 
+      setPlacedOrderId(orderId);
       clearCart();
       toast.success('Order placed successfully!');
       navigate(`/order-confirmation/${orderId}`);
     } catch (err) {
       console.error('Checkout failed:', err);
-      toast.error('We could not place your order. Please try again.');
+      toast.error(err instanceof CheckoutError ? err.message : 'We could not place your order. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (cart.length === 0) { navigate('/cart'); return null; }
+  // An empty cart has nothing to check out. This used to call navigate()
+  // during render, which raced the post-success navigation and bounced the
+  // customer back to an empty cart instead of the confirmation page.
+  useEffect(() => {
+    if (placedOrderId || submitting) return;
+    if (cart.length === 0) navigate('/cart');
+  }, [cart.length, placedOrderId, submitting, navigate]);
+
+  if (cart.length === 0 && !placedOrderId) return null;
 
   const subtotal = getCartTotal();
   const deliveryFee = subtotal > 100 ? 0 : 9.99;

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router';
-import { ShoppingCart, Heart, ArrowLeft, Package, Truck, CheckCircle, Star, Camera, Send, Upload, X, ImageIcon } from 'lucide-react';
+import { ShoppingCart, Heart, ArrowLeft, Package, Truck, CheckCircle, Star, Camera, Send, Upload, X, ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
@@ -8,7 +8,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
 import { BouquetCard } from '../components/BouquetCard';
-import { bouquets } from '../data/bouquets';
+import { useProducts } from '../contexts/ProductsContext';
 import { useCart } from '../contexts/CartContext';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { useReviews } from '../contexts/ReviewsContext';
@@ -31,6 +31,7 @@ function StarRating({ value, onChange }: { value: number; onChange?: (v: number)
 }
 
 export function BouquetDetail() {
+  const { bouquets, isLoading } = useProducts();
   const { id } = useParams();
   const bouquet = bouquets.find(b => b.id === id);
   const { addToCart } = useCart();
@@ -47,6 +48,16 @@ export function BouquetDetail() {
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
   const reviewFileRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'reviews' | 'gallery'>('details');
+
+  // A deep link (or a link from an order) renders before GET /products
+  // resolves — show a spinner rather than flashing "Bouquet not found".
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-rose-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-rose-400" />
+      </div>
+    );
+  }
 
   if (!bouquet) {
     return (

@@ -4,7 +4,7 @@ import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useReviews } from '../../contexts/ReviewsContext';
-import { bouquets } from '../../data/bouquets';
+import { useProducts } from '../../contexts/ProductsContext';
 
 function Stars({ n }: { n: number }) {
   return <span className="flex gap-0.5">{[1,2,3,4,5].map(i => <Star key={i} className={`w-3.5 h-3.5 ${i <= n ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />)}</span>;
@@ -12,6 +12,7 @@ function Stars({ n }: { n: number }) {
 
 export function ReviewsManagement() {
   const { reviews, approveReview, deleteReview, featureReview } = useReviews();
+  const { bouquets } = useProducts();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'approved' | 'pending'>('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);

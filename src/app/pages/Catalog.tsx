@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { Search, SlidersHorizontal, X, Filter } from 'lucide-react';
 import { BouquetCard } from '../components/BouquetCard';
-import { bouquets } from '../data/bouquets';
+import { useProducts } from '../contexts/ProductsContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -12,11 +12,11 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../components/ui/sheet';
 
-const categories = Array.from(new Set(bouquets.map(b => b.category)));
-const occasions = Array.from(new Set(bouquets.flatMap(b => b.occasion)));
-
 export function Catalog() {
   const [searchParams] = useSearchParams();
+  const { bouquets } = useProducts();
+  const categories = useMemo(() => Array.from(new Set(bouquets.map(b => b.category))), [bouquets]);
+  const occasions = useMemo(() => Array.from(new Set(bouquets.flatMap(b => b.occasion))), [bouquets]);
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     searchParams.get('category') ? [searchParams.get('category')!] : []
@@ -48,7 +48,7 @@ export function Catalog() {
       return b.popularity - a.popularity;
     });
     return list;
-  }, [search, selectedCategories, selectedOccasions, priceRange, sortBy]);
+  }, [bouquets, search, selectedCategories, selectedOccasions, priceRange, sortBy]);
 
   const toggle = <T,>(arr: T[], val: T, set: (v: T[]) => void) =>
     set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);

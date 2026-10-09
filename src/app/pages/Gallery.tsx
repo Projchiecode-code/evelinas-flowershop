@@ -6,12 +6,13 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { useGallery } from '../contexts/GalleryContext';
 import { useCart } from '../contexts/CartContext';
-import { bouquets } from '../data/bouquets';
+import { useProducts } from '../contexts/ProductsContext';
 import { GalleryPhoto } from '../types';
 import { toast } from 'sonner';
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
 function PostCard({ photo }: { photo: GalleryPhoto }) {
+  const { bouquets } = useProducts();
   const { likePhoto, addComment, getCommentsForPhoto } = useGallery();
   const { addToCart } = useCart();
 
@@ -202,6 +203,7 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
 
 // ─── Main Gallery Page ────────────────────────────────────────────────────────
 export function Gallery() {
+  const { bouquets } = useProducts();
   const { getApprovedPhotos, submitPhoto } = useGallery();
   const [filter, setFilter] = useState<'all' | 'featured'>('all');
   const [showSubmit, setShowSubmit] = useState(false);
