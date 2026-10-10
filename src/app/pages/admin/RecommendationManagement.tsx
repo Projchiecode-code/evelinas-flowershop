@@ -90,16 +90,19 @@ function RuleForm({
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      {/* Footer — wraps to two rows on phones so Save Changes never overflows the card */}
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} className="accent-rose-500 w-4 h-4" />
           <span className="text-sm text-gray-700">Active</span>
         </label>
-        <div className="flex-1" />
-        <Button variant="outline" onClick={onCancel} className="text-gray-600">Cancel</Button>
-        <Button onClick={onSave} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
-          <Check className="w-4 h-4 mr-1" /> {isAdding ? 'Add Rule' : 'Save Changes'}
-        </Button>
+        <div className="hidden sm:block flex-1" />
+        <div className="flex items-center gap-3 sm:gap-4 ml-auto">
+          <Button variant="outline" onClick={onCancel} className="text-gray-600">Cancel</Button>
+          <Button onClick={onSave} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
+            <Check className="w-4 h-4 mr-1" /> {isAdding ? 'Add Rule' : 'Save Changes'}
+          </Button>
+        </div>
       </div>
     </div>
   );

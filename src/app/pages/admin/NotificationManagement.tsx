@@ -54,12 +54,13 @@ function TemplateForm({
           </label>
           <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={3} className="w-full border border-pink-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-rose-400" placeholder="Notification body..." />
         </div>
-        <div className="flex items-center justify-between">
+        {/* Footer — wraps to two rows on phones so Save Changes never overflows the card */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} className="accent-rose-500 w-4 h-4" />
             <span className="text-sm text-gray-700">Active</span>
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-3 sm:gap-2 ml-auto">
             <Button variant="outline" onClick={onCancel} className="text-gray-600">Cancel</Button>
             <Button onClick={onSave} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
               <Check className="w-4 h-4 mr-1" /> {isAdding ? 'Add Template' : 'Save Changes'}
