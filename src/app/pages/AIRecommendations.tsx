@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Sparkles, ChevronRight, RotateCcw, ShoppingCart, Star } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -10,18 +10,31 @@ import { useReviews } from '../contexts/ReviewsContext';
 import { useOrders } from '../contexts/OrderContext';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { getRecentViews } from '../utils/viewHistory';
+import { settingsApi } from '../api/client';
 import { formatCurrency } from '../utils/currency';
 import {
   buildSignals,
   applySignals,
   RecommendationSignals,
 } from '../utils/aiRecommendations';
-import { Bouquet } from '../types';
+import { AiBudget, Bouquet, DEFAULT_AI_BUDGET } from '../types';
 
 interface Step {
   id: string;
   question: string;
   options: { label: string; value: string; emoji: string }[];
+}
+
+// The three priced budget brackets for the AI Picks quiz — labels derive from
+// the admin-editable numbers (Recommendation Management → Budget Ranges),
+// which are stored server-side so every shopper sees the latest brackets.
+function buildBudgetOptions(b: AiBudget) {
+  return [
+    { label: `Under ₱${b.lowMax}`, value: 'low', emoji: '💚' },
+    { label: `₱${b.lowMax} – ₱${b.midMax}`, value: 'medium', emoji: '💛' },
+    { label: `₱${b.midMax + 1} – ₱${b.highMax}`, value: 'high', emoji: '🧡' },
+    { label: 'No limit', value: 'any', emoji: '💜' },
+  ];
 }
 
 const STEPS: Step[] = [
@@ -42,12 +55,8 @@ const STEPS: Step[] = [
   {
     id: 'budget',
     question: 'What is your budget?',
-    options: [
-      { label: 'Under ₱75', value: 'low', emoji: '💚' },
-      { label: '₱75 – ₱99', value: 'medium', emoji: '💛' },
-      { label: '₱100 – ₱120', value: 'high', emoji: '🧡' },
-      { label: 'No limit', value: 'any', emoji: '💜' },
-    ],
+    // Fallback labels; the component swaps in the live server brackets.
+    options: buildBudgetOptions(DEFAULT_AI_BUDGET),
   },
   {
     id: 'color',
@@ -78,7 +87,7 @@ interface RecommendedBouquet extends Bouquet {
   reasons: string[];
 }
 
-function scoreRule(bouquet: Bouquet, answers: Record<string, string>): { score: number; reasons: string[] } {
+function scoreRule(bouquet: Bouquet, answers: Record<string, string>, brackets: AiBudget): { score: number; reasons: string[] } {
   let score = (bouquet.popularity / 100) * 20;
   const reasons: string[] = [];
 
@@ -89,11 +98,12 @@ function scoreRule(bouquet: Bouquet, answers: Record<string, string>): { score: 
     reasons.push(`Perfect for ${occasion}`);
   }
 
-  // Budget rule
+  // Budget rule — bands mirror the bracket labels the shopper saw:
+  // Under ₱lowMax / ₱lowMax–₱midMax / ₱(midMax+1)–₱highMax.
   const budget = answers['budget'];
-  if (budget === 'low' && bouquet.price < 75) { score += 25; reasons.push('Within your budget'); }
-  else if (budget === 'medium' && bouquet.price >= 75 && bouquet.price < 100) { score += 25; reasons.push('Great value in your range'); }
-  else if (budget === 'high' && bouquet.price >= 100 && bouquet.price <= 120) { score += 25; reasons.push('Premium pick in your range'); }
+  if (budget === 'low' && bouquet.price < brackets.lowMax) { score += 25; reasons.push('Within your budget'); }
+  else if (budget === 'medium' && bouquet.price >= brackets.lowMax && bouquet.price <= brackets.midMax) { score += 25; reasons.push('Great value in your range'); }
+  else if (budget === 'high' && bouquet.price > brackets.midMax && bouquet.price <= brackets.highMax) { score += 25; reasons.push('Premium pick in your range'); }
   else if (budget === 'any') { score += 10; }
 
   // Color rule
@@ -134,10 +144,10 @@ function scoreRule(bouquet: Bouquet, answers: Record<string, string>): { score: 
   return { score, reasons: reasons.slice(0, 3) };
 }
 
-function getRecommendations(answers: Record<string, string>, signals: RecommendationSignals): RecommendedBouquet[] {
+function getRecommendations(answers: Record<string, string>, signals: RecommendationSignals, brackets: AiBudget): RecommendedBouquet[] {
   const ranked = getCatalog()
     .map(b => {
-      const { score, reasons } = scoreRule(b, answers);
+      const { score, reasons } = scoreRule(b, answers, brackets);
       const signal = applySignals(b, signals);
       if (signal.excluded) return null; // out of stock
       return {
@@ -168,12 +178,31 @@ export function AIRecommendations() {
   const [results, setResults] = useState<RecommendedBouquet[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
+  // Admin-editable budget brackets (Settings → AI Picks); defaults until loaded.
+  const [budget, setBudget] = useState<AiBudget>(DEFAULT_AI_BUDGET);
+
+  useEffect(() => {
+    settingsApi.getAiBudget()
+      .then(b => setBudget({
+        lowMax: Number(b?.lowMax) || DEFAULT_AI_BUDGET.lowMax,
+        midMax: Number(b?.midMax) || DEFAULT_AI_BUDGET.midMax,
+        highMax: Number(b?.highMax) || DEFAULT_AI_BUDGET.highMax,
+      }))
+      .catch(() => { /* offline — defaults are already set */ });
+  }, []);
+
+  // The budget step's labels come from the live brackets; the other steps
+  // are static.
+  const steps: Step[] = useMemo(
+    () => STEPS.map(s => (s.id === 'budget' ? { ...s, options: buildBudgetOptions(budget) } : s)),
+    [budget],
+  );
 
   const handleAnswer = (stepId: string, value: string) => {
     const newAnswers = { ...answers, [stepId]: value };
     setAnswers(newAnswers);
 
-    if (currentStep < STEPS.length - 1) {
+    if (currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
       setLoadProgress(0);
@@ -205,7 +234,7 @@ export function AIRecommendations() {
           viewedIds: getRecentViews(),
           orders,
           favoriteCategories: favorites.map(f => f.category),
-        })));
+        }), budget));
         setLoading(false);
       }
     }, 120);
@@ -224,8 +253,8 @@ export function AIRecommendations() {
     setLoading(false);
   };
 
-  const step = STEPS[currentStep];
-  const progress = ((currentStep) / STEPS.length) * 100;
+  const step = steps[currentStep];
+  const progress = ((currentStep) / steps.length) * 100;
   const loadStage =
     loadProgress < 18 ? 'Reading your answers…'
     : loadProgress < 42 ? 'Checking live customer ratings…'
@@ -258,7 +287,7 @@ export function AIRecommendations() {
             <div className="p-8">
               <div className="flex items-center justify-between mb-2">
                 <Badge className="bg-rose-100 text-rose-700 border-rose-200">
-                  Step {currentStep + 1} of {STEPS.length}
+                  Step {currentStep + 1} of {steps.length}
                 </Badge>
                 {currentStep > 0 && (
                   <button onClick={() => setCurrentStep(p => p - 1)} className="text-sm text-gray-400 hover:text-rose-600 transition-colors">
@@ -291,7 +320,7 @@ export function AIRecommendations() {
                 <div className="mt-8 pt-6 border-t border-rose-100">
                   <p className="text-xs text-gray-500 mb-2">Your choices so far:</p>
                   <div className="flex flex-wrap gap-2">
-                    {STEPS.filter((_, i) => i < currentStep).map(s => (
+                    {steps.filter((_, i) => i < currentStep).map(s => (
                       answers[s.id] && (
                         <Badge key={s.id} className="bg-purple-100 text-purple-700 border-purple-200">
                           {s.options.find(o => o.value === answers[s.id])?.emoji} {s.options.find(o => o.value === answers[s.id])?.label}
@@ -344,7 +373,7 @@ export function AIRecommendations() {
                 Personalized with your answers, live customer ratings, and your recent activity
               </p>
               <div className="flex flex-wrap justify-center gap-2 mb-6">
-                {STEPS.map(s => (
+                {steps.map(s => (
                   answers[s.id] && (
                     <Badge key={s.id} className="bg-rose-100 text-rose-700 border-rose-200 px-3 py-1">
                       {s.options.find(o => o.value === answers[s.id])?.emoji} {s.options.find(o => o.value === answers[s.id])?.label}

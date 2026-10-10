@@ -161,3 +161,11 @@ export const userApi = {
   updateMe: (data: { name?: string; phone?: string; address?: string; city?: string; zipCode?: string }) =>
     api.patch('/users/me', data),
 };
+
+// Settings — admin-editable configuration (AI Picks budget brackets, …)
+export interface AiBudgetDto { lowMax: number; midMax: number; highMax: number }
+
+export const settingsApi = {
+  getAiBudget: () => api.get<AiBudgetDto>('/settings/ai-budget'),
+  updateAiBudget: (data: AiBudgetDto) => api.patch<AiBudgetDto>('/settings/ai-budget', data),
+};

@@ -24,6 +24,20 @@ export interface CartItem {
 
 export type PaymentMethod = 'cod' | 'e-wallet' | 'bank-transfer';
 
+/**
+ * AI Picks quiz budget brackets: "Under ₱lowMax" / "₱lowMax–₱midMax" /
+ * "₱(midMax+1)–₱highMax". Admin-editable on the Recommendation Rules page;
+ * stored server-side (Setting: ai-budget) so every shopper sees the update.
+ */
+export interface AiBudget {
+  lowMax: number;
+  midMax: number;
+  highMax: number;
+}
+
+/** Mirrors the server default (server/routes/settings.ts) — keep both at 75/99/120. */
+export const DEFAULT_AI_BUDGET: AiBudget = { lowMax: 75, midMax: 99, highMax: 120 };
+
 export interface Order {
   id: string;
   items: CartItem[];

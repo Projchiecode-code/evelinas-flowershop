@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Zap, ToggleLeft, ToggleRight, X, Check, ChevronDown } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Edit2, Trash2, Zap, ToggleLeft, ToggleRight, X, Check, ChevronDown, Coins, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
-import { AIRule } from '../../types';
+import { toast } from 'sonner';
+import { AIRule, AiBudget, DEFAULT_AI_BUDGET } from '../../types';
 import { defaultAIRules } from '../../data/aiRules';
+import { settingsApi } from '../../api/client';
 
 const ACTION_COLOR: Record<string, string> = {
   boost: 'bg-green-100 text-green-700 border-green-200',
@@ -108,6 +110,120 @@ function RuleForm({
   );
 }
 
+/**
+ * Quiz budget brackets — admin-editable, saved server-side so every shopper
+ * sees the latest labels instantly (no redeploy). When flower prices rise,
+ * bump these numbers and the AI Picks quiz + its scoring bands follow.
+ */
+function BudgetRangesCard() {
+  const [draft, setDraft] = useState<AiBudget>(DEFAULT_AI_BUDGET);
+  const [saved, setSaved] = useState<AiBudget>(DEFAULT_AI_BUDGET);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    settingsApi.getAiBudget()
+      .then(b => {
+        const v: AiBudget = {
+          lowMax: Number.isInteger(Number(b?.lowMax)) ? Number(b.lowMax) : DEFAULT_AI_BUDGET.lowMax,
+          midMax: Number.isInteger(Number(b?.midMax)) ? Number(b.midMax) : DEFAULT_AI_BUDGET.midMax,
+          highMax: Number.isInteger(Number(b?.highMax)) ? Number(b.highMax) : DEFAULT_AI_BUDGET.highMax,
+        };
+        setDraft(v);
+        setSaved(v);
+      })
+      .catch(() => { /* offline — defaults are already shown */ });
+  }, []);
+
+  const set = (key: keyof AiBudget) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const n = e.target.value === '' ? NaN : Number(e.target.value);
+    setDraft(d => ({ ...d, [key]: n }));
+  };
+
+  const valid = Number.isInteger(draft.lowMax) && Number.isInteger(draft.midMax) && Number.isInteger(draft.highMax)
+    && draft.lowMax >= 1 && draft.lowMax < draft.midMax && draft.midMax < draft.highMax && draft.highMax <= 1_000_000;
+  const dirty = draft.lowMax !== saved.lowMax || draft.midMax !== saved.midMax || draft.highMax !== saved.highMax;
+  const show = (n: number) => (Number.isInteger(n) && n > 0 ? n : '?');
+
+  const save = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      const b = await settingsApi.updateAiBudget(draft);
+      const v: AiBudget = { lowMax: Number(b.lowMax), midMax: Number(b.midMax), highMax: Number(b.highMax) };
+      setDraft(v);
+      setSaved(v);
+      toast.success('Budget ranges saved — the AI Picks quiz shows the new brackets immediately.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save budget ranges');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const FIELDS: { key: keyof AiBudget; label: string; hint: string }[] = [
+    { key: 'lowMax', label: 'Low option: Under ₱', hint: 'everything below this' },
+    { key: 'midMax', label: 'Medium option: up to ₱', hint: `starts at the low bracket` },
+    { key: 'highMax', label: 'High option: up to ₱', hint: 'top of the premium band' },
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+        <h2 className="font-bold text-gray-800 flex items-center gap-2">
+          <Coins className="w-4 h-4 text-purple-500" /> Quiz Budget Ranges
+        </h2>
+        <span className="text-xs text-gray-400">AI Picks quiz • applies instantly, no redeploy</span>
+      </div>
+      <p className="text-sm text-gray-500 mb-4">
+        When flower prices go up, update the three budget brackets here — the quiz labels and its price scoring change with them.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {FIELDS.map(f => (
+          <div key={f.key}>
+            <label className="text-sm font-semibold text-gray-700">{f.label}</label>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              value={Number.isFinite(draft[f.key]) ? draft[f.key] : ''}
+              onChange={set(f.key)}
+              className="mt-1.5"
+            />
+            <p className="text-xs text-gray-400 mt-1">{f.hint}</p>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-xs text-gray-400 mt-3">
+        Quiz will show:{' '}
+        <span className="font-medium text-gray-600">
+          Under ₱{show(draft.lowMax)} · ₱{show(draft.lowMax)} – ₱{show(draft.midMax)} · ₱{show(draft.midMax) === '?' ? '?' : draft.midMax + 1} – ₱{show(draft.highMax)} · No limit
+        </span>
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3 mt-4">
+        {!valid && (
+          <p className="text-xs text-red-500">Brackets must be whole numbers that increase: 1 ≤ Under &lt; medium ≤ high (max ₱1,000,000).</p>
+        )}
+        <div className="ml-auto flex items-center gap-3">
+          <Button variant="outline" onClick={() => setDraft(saved)} disabled={saving || !dirty} className="border-gray-200">
+            Reset
+          </Button>
+          <Button
+            onClick={save}
+            disabled={saving || !valid || !dirty}
+            className="bg-gradient-to-r from-rose-500 to-purple-500 text-white"
+          >
+            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+            Save Ranges
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RecommendationManagement() {
   const [rules, setRules] = useState<AIRule[]>(defaultAIRules);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -161,6 +277,9 @@ export function RecommendationManagement() {
           </div>
         </div>
       </div>
+
+      {/* Admin-editable quiz budget brackets */}
+      <BudgetRangesCard />
 
       {/* Top-level add form */}
       {addingAtTop && (

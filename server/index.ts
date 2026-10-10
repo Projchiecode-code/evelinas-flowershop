@@ -10,6 +10,7 @@ import reviewRoutes from './routes/reviews';
 import galleryRoutes from './routes/gallery';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
+import settingsRoutes from './routes/settings';
 import Bouquet from './models/Bouquet';
 import { getJwtSecret } from './middleware/auth';
 import { errorResponse } from './utils/httpError';
@@ -51,6 +52,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   errorResponse(res, err.status || 500, err);
