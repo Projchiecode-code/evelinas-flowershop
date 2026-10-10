@@ -290,3 +290,4 @@ server/
    ├─ lowStock.ts        Threshold alerts for inventory monitoring
    └─ httpError.ts       Consistent { "error" } responses
 ```
+ps. this is a capstone project and educational purpose only
