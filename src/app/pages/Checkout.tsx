@@ -100,6 +100,10 @@ export function Checkout() {
   const [proofFile, setProofFile] = useState<string | null>(null);
   const [proofFileName, setProofFileName] = useState('');
   const [processingProof, setProcessingProof] = useState(false);
+  // Receipt details for e-wallet / bank transfer — verified against the
+  // screenshot by the admin before the order ships.
+  const [paymentRef, setPaymentRef] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
   // Set once an order exists, so the empty-cart redirect below doesn't race
   // the navigation to the confirmation page.
@@ -144,8 +148,10 @@ export function Checkout() {
     if (!formData.fullName || !formData.email || !formData.phone || !formData.address) {
       toast.error('Please fill in all required fields'); return;
     }
-    if ((paymentMethod === 'e-wallet' || paymentMethod === 'bank-transfer') && !proofFile) {
-      toast.error('Please upload your payment proof screenshot'); return;
+    if (paymentMethod === 'e-wallet' || paymentMethod === 'bank-transfer') {
+      if (!proofFile) { toast.error('Please upload your payment proof screenshot'); return; }
+      if (!paymentRef.trim()) { toast.error('Please enter your payment reference number'); return; }
+      if (!paymentAmount || Number(paymentAmount) <= 0) { toast.error('Please enter the amount you sent'); return; }
     }
 
     const subtotal = getCartTotal();
@@ -170,6 +176,8 @@ export function Checkout() {
         estimatedDelivery,
         paymentMethod,
         paymentProof: proofFile || undefined,
+        paymentRef: paymentRef.trim() || undefined,
+        paymentAmount: Number(paymentAmount) || undefined,
       });
 
       setPlacedOrderId(orderId);
@@ -344,6 +352,42 @@ export function Checkout() {
                           <p key={line} className="text-sm text-purple-700">{line}</p>
                         ))}
                       </div>
+
+                      {/* Receipt details — the shop checks these against the screenshot */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="paymentRef" className="text-gray-700 font-semibold">
+                            Reference Number * <span className="text-xs text-gray-400 font-normal">(from your receipt)</span>
+                          </Label>
+                          <Input
+                            id="paymentRef"
+                            value={paymentRef}
+                            onChange={e => setPaymentRef(e.target.value)}
+                            placeholder="e.g. 123456789012"
+                            maxLength={64}
+                            className="mt-2"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="paymentAmount" className="text-gray-700 font-semibold">
+                            Amount Sent (₱) *
+                          </Label>
+                          <Input
+                            id="paymentAmount"
+                            type="number"
+                            min={1}
+                            step="0.01"
+                            inputMode="decimal"
+                            value={paymentAmount}
+                            onChange={e => setPaymentAmount(e.target.value)}
+                            placeholder={`e.g. ${total.toFixed(2)}`}
+                            className="mt-2"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-400 -mt-1">
+                        Type these exactly as they appear on your receipt — the shop verifies them against your screenshot before shipping.
+                      </p>
 
                       <div>
                         <Label className="text-gray-700 font-semibold">

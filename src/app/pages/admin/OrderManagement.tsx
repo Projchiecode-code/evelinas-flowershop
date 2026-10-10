@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ChevronDown, ChevronUp, Package, CreditCard, Truck, Star, CheckCircle, XCircle, ImageIcon, Eye, ArrowRight } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Package, CreditCard, Truck, Star, CheckCircle, XCircle, ImageIcon, Eye, ArrowRight, AlertCircle } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -32,7 +32,13 @@ const PAYMENT_LABEL: Record<string, string> = {
   'cod': 'Cash on Delivery', 'e-wallet': 'E-Wallet', 'bank-transfer': 'Bank Transfer',
 };
 
-function ProofModal({ src, onClose }: { src: string; onClose: () => void }) {
+// True when the customer's stated amount doesn't match the order total
+// (compared in centavos) — the admin must confirm the difference by hand
+// before shipping. Legacy orders have no stated amount, so never flagged.
+const paymentMismatch = (order: Order) =>
+  !!order.paymentAmount && Math.round(order.paymentAmount * 100) !== Math.round(order.total * 100);
+
+function ProofModal({ src, order, onClose }: { src: string; order?: Order; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -45,8 +51,30 @@ function ProofModal({ src, onClose }: { src: string; onClose: () => void }) {
         <div className="p-4 bg-gray-50">
           <img src={src} alt="Payment proof" className="w-full rounded-xl object-contain max-h-96" />
         </div>
+        {/* Stated receipt details — check these against the screenshot */}
+        {order && (order.paymentRef || (order.paymentAmount || 0) > 0) && (
+          <div className="px-5 py-3 space-y-1.5 border-t border-gray-100">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-gray-500">Reference number</span>
+              <span className="font-mono font-semibold text-gray-800 break-all">{order.paymentRef || '—'}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-gray-500">Amount sent</span>
+              <span className={`font-semibold ${paymentMismatch(order) ? 'text-amber-600' : 'text-gray-800'}`}>
+                {formatCurrency(order.paymentAmount || 0)}
+                {paymentMismatch(order) && (
+                  <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                    ≠ total {formatCurrency(order.total)}
+                  </span>
+                )}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="px-5 py-3 text-xs text-gray-400 text-center border-t border-gray-100">
-          Review the payment proof and advance the order to "To Ship" if payment is verified.
+          {order?.paymentRef
+            ? 'Check the reference number and amount above against the screenshot — advance the order to "To Ship" only when everything matches.'
+            : 'Review the payment proof and advance the order to "To Ship" if payment is verified.'}
         </div>
       </div>
     </div>
@@ -71,7 +99,7 @@ function OrderRow({ order }: { order: Order }) {
           were invalid DOM (divs inside a table) that the browser may
           reparent out from under React. */}
       {showProof && order.paymentProof && createPortal(
-        <ProofModal src={order.paymentProof} onClose={() => setShowProof(false)} />,
+        <ProofModal src={order.paymentProof} order={order} onClose={() => setShowProof(false)} />,
         document.body
       )}
 
@@ -147,24 +175,47 @@ function OrderRow({ order }: { order: Order }) {
               )}
             </div>
 
-            {/* Payment Proof */}
-            {order.paymentProof && (
+            {/* Payment verification: stated receipt details, plus the
+                screenshot when one was uploaded. */}
+            {(order.paymentProof || order.paymentRef || (order.paymentAmount || 0) > 0) && (
               <div className="mb-5 p-4 bg-white rounded-2xl border border-pink-100">
-                <p className="text-xs text-gray-500 mb-3 font-semibold">Payment Proof</p>
-                <div className="flex items-center gap-3">
-                  <img src={order.paymentProof} alt="Payment proof" className="w-20 h-20 rounded-xl object-cover border border-pink-200" />
-                  <div>
-                    <p className="text-sm text-gray-700 mb-2">Customer submitted a payment screenshot.</p>
-                    <Button
-                      size="sm"
-                      onClick={e => { e.stopPropagation(); setShowProof(true); }}
-                      variant="outline"
-                      className="border-blue-200 text-blue-600 hover:bg-blue-50"
-                    >
-                      <Eye className="w-3.5 h-3.5 mr-1.5" /> View Full Screenshot
-                    </Button>
+                <p className="text-xs text-gray-500 mb-3 font-semibold">{order.paymentProof ? 'Payment Proof' : 'Payment Details'}</p>
+                {(order.paymentRef || (order.paymentAmount || 0) > 0) && (
+                  <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="bg-rose-50/50 rounded-xl border border-pink-100 p-2.5">
+                      <p className="text-xs text-gray-500">Reference #</p>
+                      <p className="text-sm font-mono font-semibold text-gray-800 break-all">{order.paymentRef || '—'}</p>
+                    </div>
+                    <div className="bg-rose-50/50 rounded-xl border border-pink-100 p-2.5">
+                      <p className="text-xs text-gray-500">Amount sent</p>
+                      <p className={`text-sm font-semibold ${paymentMismatch(order) ? 'text-amber-600' : 'text-gray-800'}`}>
+                        {formatCurrency(order.paymentAmount || 0)}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
+                {paymentMismatch(order) && (
+                  <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    Stated amount differs from the order total ({formatCurrency(order.total)}) — confirm with the customer before shipping.
+                  </div>
+                )}
+                {order.paymentProof && (
+                  <div className="flex items-center gap-3">
+                    <img src={order.paymentProof} alt="Payment proof" className="w-20 h-20 rounded-xl object-cover border border-pink-200" />
+                    <div>
+                      <p className="text-sm text-gray-700 mb-2">Customer submitted a payment screenshot.</p>
+                      <Button
+                        size="sm"
+                        onClick={e => { e.stopPropagation(); setShowProof(true); }}
+                        variant="outline"
+                        className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                      >
+                        <Eye className="w-3.5 h-3.5 mr-1.5" /> View Full Screenshot
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

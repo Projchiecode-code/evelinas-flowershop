@@ -40,6 +40,10 @@ export interface Order {
   ratingComment?: string;
   paymentMethod?: PaymentMethod;
   paymentProof?: string;
+  /** Reference number the customer states for e-wallet / bank transfer. */
+  paymentRef?: string;
+  /** Amount the customer states they sent (digital payments only). */
+  paymentAmount?: number;
 }
 
 export type OrderStatus =
@@ -62,6 +66,8 @@ export interface OrderPayload {
   estimatedDelivery: Date;
   paymentMethod?: PaymentMethod;
   paymentProof?: string;
+  paymentRef?: string;
+  paymentAmount?: number;
 }
 
 export interface TrackingUpdate {

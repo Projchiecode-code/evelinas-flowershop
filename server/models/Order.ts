@@ -30,6 +30,12 @@ const orderSchema = new mongoose.Schema({
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   paymentMethod: { type: String, enum: ['cod', 'e-wallet', 'bank-transfer'], default: 'cod' },
   paymentProof: { type: String, default: '' },
+  // Payment verification for e-wallet / bank transfer: the customer states
+  // the reference number and amount from their receipt, and the admin checks
+  // both against the screenshot before shipping. Empty/0 for COD and for
+  // orders placed before this verification existed.
+  paymentRef: { type: String, default: '' },
+  paymentAmount: { type: Number, default: 0 },
   estimatedDelivery: { type: Date },
   trackingUpdates: [{
     status: { type: String },

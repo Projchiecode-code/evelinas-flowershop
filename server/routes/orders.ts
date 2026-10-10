@@ -50,7 +50,7 @@ router.post('/', authenticate, async (req: any, res) => {
     // `total`/`deliveryFee` are deliberately NOT read from the body: money is
     // recomputed below from database prices, so a tampered client can't decide
     // what it pays (and every revenue report stays trustworthy).
-    const { items, customerName, deliveryAddress, phone, email, paymentMethod, paymentProof, estimatedDelivery } = req.body;
+    const { items, customerName, deliveryAddress, phone, email, paymentMethod, paymentProof, paymentRef, paymentAmount, estimatedDelivery } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Cart is empty' });
@@ -66,6 +66,21 @@ router.post('/', authenticate, async (req: any, res) => {
     if (paymentMethod !== undefined && paymentMethod !== null && paymentMethod !== ''
       && !['cod', 'e-wallet', 'bank-transfer'].includes(paymentMethod)) {
       return res.status(400).json({ error: 'Invalid payment method' });
+    }
+    // Digital payments are verified by hand: the customer must state the
+    // reference number and amount from their receipt so the admin can check
+    // them against the screenshot instead of eyeballing an image alone.
+    const method = paymentMethod || 'cod';
+    const needsPaymentDetails = method === 'e-wallet' || method === 'bank-transfer';
+    const ref = typeof paymentRef === 'string' ? paymentRef.trim() : '';
+    const sent = Number(paymentAmount);
+    if (needsPaymentDetails) {
+      if (!ref || ref.length > 64) {
+        return res.status(400).json({ error: 'Payment reference number is required (max 64 characters)' });
+      }
+      if (!Number.isFinite(sent) || sent <= 0 || sent > 10_000_000) {
+        return res.status(400).json({ error: 'Amount sent is required' });
+      }
     }
     if (paymentProof) {
       // Screenshots arrive as data URLs (also accept plain http(s) links).
@@ -172,8 +187,10 @@ router.post('/', authenticate, async (req: any, res) => {
       phone,
       email,
       customer: req.userId,
-      paymentMethod: paymentMethod || 'cod',
+      paymentMethod: method,
       paymentProof: paymentProof || '',
+      paymentRef: ref,
+      paymentAmount: Number.isFinite(sent) && sent > 0 ? sent : 0,
       estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : new Date(Date.now() + 24 * 60 * 60 * 1000),
       trackingUpdates: [{
         status: 'to-pay',
