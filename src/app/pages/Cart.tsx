@@ -6,6 +6,14 @@ import { Separator } from '../components/ui/separator';
 import { useCart } from '../contexts/CartContext';
 import { formatCurrency } from '../utils/currency';
 
+/**
+ * Units left for a cart line. Carts persist across sessions, so an item saved
+ * before stock tracking carries no `stock` — treat that as unlimited here and
+ * let the server enforce the real limit at checkout.
+ */
+const stockOf = (item: { bouquet: { stock?: number } }) =>
+  typeof item.bouquet.stock === 'number' ? item.bouquet.stock : Infinity;
+
 export function Cart() {
   const { cart, removeFromCart, updateQuantity, getCartTotal } = useCart();
 
@@ -87,24 +95,39 @@ export function Cart() {
                       )}
 
                       <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
-                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateQuantity(item.bouquet.id, item.quantity - 1)}
-                          >
-                            <Minus className="w-4 h-4" />
-                          </Button>
-                          <span className="font-semibold min-w-[2rem] text-center">
-                            {item.quantity}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateQuantity(item.bouquet.id, item.quantity + 1)}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
+                        <div className="shrink-0">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateQuantity(item.bouquet.id, item.quantity - 1)}
+                            >
+                              <Minus className="w-4 h-4" />
+                            </Button>
+                            <span className="font-semibold min-w-[2rem] text-center">
+                              {item.quantity}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateQuantity(item.bouquet.id, item.quantity + 1)}
+                              disabled={item.quantity >= stockOf(item)}
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          {/* Stock surfaced right where quantity is chosen — the
+                              server re-checks at checkout regardless. */}
+                          {item.quantity > stockOf(item) && (
+                            <p className="mt-1 text-xs text-amber-600 font-medium">
+                              Only {stockOf(item)} in stock — reduce the quantity to check out
+                            </p>
+                          )}
+                          {item.quantity <= stockOf(item) && stockOf(item) <= 5 && (
+                            <p className="mt-1 text-xs text-amber-600 font-medium">
+                              Only {stockOf(item)} left
+                            </p>
+                          )}
                         </div>
 
                         <div className="text-right min-w-0">

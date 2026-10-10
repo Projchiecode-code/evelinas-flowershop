@@ -19,6 +19,10 @@ const orderSchema = new mongoose.Schema({
     enum: ['to-pay', 'to-ship', 'to-receive', 'to-rate', 'rated', 'cancelled'],
     default: 'to-pay',
   },
+  // True while this order's quantities are currently deducted from product
+  // stock. Orders placed before stock tracking exist with `false` (nothing was
+  // deducted for them, so cancelling must not hand back phantom stock).
+  stockReserved: { type: Boolean, default: false },
   customerName: { type: String, required: true },
   deliveryAddress: { type: String, required: true },
   phone: { type: String, required: true },
@@ -38,5 +42,10 @@ const orderSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
+
+// Order lists are always "one customer's history" or "newest first / by status".
+orderSchema.index({ customer: 1, createdAt: -1 });
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ status: 1 });
 
 export default mongoose.model('Order', orderSchema);

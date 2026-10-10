@@ -8,6 +8,8 @@ export interface Bouquet {
   occasion: string[];
   popularity: number;
   inStock: boolean;
+  /** Sellable units remaining — checkout decrements, cancels restock. */
+  stock: number;
   flowers: string[];
 }
 

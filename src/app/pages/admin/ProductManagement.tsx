@@ -10,7 +10,7 @@ import { formatCurrency } from '../../utils/currency';
 
 const EMPTY: Omit<Bouquet, 'id'> = {
   name: '', description: '', price: 0, image: '', category: 'Roses',
-  occasion: [], popularity: 80, inStock: true, flowers: [],
+  occasion: [], popularity: 80, inStock: true, stock: 10, flowers: [],
 };
 
 const CATEGORIES = ['Roses', 'Lilies', 'Tulips', 'Sunflowers', 'Orchids', 'Peonies', 'Mixed'];
@@ -128,6 +128,17 @@ export function ProductManagement() {
               <Input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: Number(e.target.value) }))} className="border-pink-200" />
             </div>
             <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Stock (units)</label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={form.stock}
+                onChange={e => setForm(f => ({ ...f, stock: Math.max(0, Math.floor(Number(e.target.value) || 0)) }))}
+                className="border-pink-200"
+              />
+            </div>
+            <div>
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Image URL</label>
               <Input value={form.image} onChange={e => setForm(f => ({ ...f, image: e.target.value }))} placeholder="https://..." className="border-pink-200" />
             </div>
@@ -198,6 +209,9 @@ export function ProductManagement() {
                     <button onClick={() => toggleStock(p.id)} className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${p.inStock ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                       {p.inStock ? 'In Stock' : 'Out of Stock'}
                     </button>
+                    <p className={`text-xs mt-1 ${p.stock <= 5 ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>
+                      {p.stock} unit{p.stock === 1 ? '' : 's'} left
+                    </p>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-2">

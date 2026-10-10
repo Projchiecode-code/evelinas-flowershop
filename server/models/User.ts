@@ -15,6 +15,10 @@ const userSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 
+// `email: unique` above already creates its index; role matters because every
+// placed order fans out an alert to `find({ role: 'admin' })`.
+userSchema.index({ role: 1 });
+
 userSchema.pre('save', async function (this: any, next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 12);

@@ -3,6 +3,7 @@ import Bouquet from '../models/Bouquet';
 import { errorResponse } from '../utils/httpError';
 import { bouquets } from '../../src/app/data/bouquets';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { parsePage, envelope } from '../utils/pagination';
 
 const router = Router();
 
@@ -37,6 +38,15 @@ router.get('/', async (req, res) => {
         { description: { $regex: search, $options: 'i' } },
       ];
     }
+    const { paged, page, limit, skip } = parsePage(req, 50);
+    if (paged) {
+      // Opt-in pagination (?page=…) — envelope instead of the full list.
+      const [items, total] = await Promise.all([
+        Bouquet.find(filter).sort({ popularity: -1 }).skip(skip).limit(limit),
+        Bouquet.countDocuments(filter),
+      ]);
+      return res.json(envelope(items, total, page, limit));
+    }
     const products = await Bouquet.find(filter).sort({ popularity: -1 });
     res.json(products);
   } catch (err: any) {
@@ -60,8 +70,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
     // Whitelist — only schema fields are accepted, so a crafted body can't
     // smuggle in _id/createdAt or anything the model doesn't own.
-    const { name, description, price, image, category, occasion, popularity, inStock, flowers } = req.body;
-    const product = new Bouquet({ name, description, price, image, category, occasion, popularity, inStock, flowers });
+    const { name, description, price, image, category, occasion, popularity, inStock, stock, flowers } = req.body;
+    const product = new Bouquet({ name, description, price, image, category, occasion, popularity, inStock, stock, flowers });
     await product.save();
     res.status(201).json(product);
   } catch (err: any) {
@@ -74,7 +84,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
     // Same whitelist as POST; runValidators applies schema bounds to updates
     // too (findByIdAndUpdate skips validators by default).
     const update: Record<string, any> = {};
-    for (const key of ['name', 'description', 'price', 'image', 'category', 'occasion', 'popularity', 'inStock', 'flowers']) {
+    for (const key of ['name', 'description', 'price', 'image', 'category', 'occasion', 'popularity', 'inStock', 'stock', 'flowers']) {
       if (req.body[key] !== undefined) update[key] = req.body[key];
     }
     const product = await Bouquet.findByIdAndUpdate(req.params.id, update, {

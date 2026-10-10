@@ -5,6 +5,7 @@ import Notification from '../models/Notification';
 import User from '../models/User';
 import { errorResponse } from '../utils/httpError';
 import { authenticate } from '../middleware/auth';
+import { parsePage, envelope } from '../utils/pagination';
 
 // Mirrors the status enum on the Order schema (kept as a literal union so
 // assignments to `order.status` typecheck after runtime validation).
@@ -67,10 +68,11 @@ router.post('/', authenticate, async (req: any, res) => {
     }
     if (paymentProof) {
       // Screenshots arrive as data URLs (also accept plain http(s) links).
-      // The cap stops a crafted order from ballooning toward Mongo's 16 MB doc limit.
-      if (typeof paymentProof !== 'string' || paymentProof.length > 8_000_000
+      // The cap stops a crafted order from ballooning toward Mongo's 16 MB doc
+      // limit — the browser compresses uploads to ~1.5 MB well before this.
+      if (typeof paymentProof !== 'string' || paymentProof.length > 1_500_000
         || !(paymentProof.startsWith('data:image/') || /^https?:\/\//.test(paymentProof))) {
-        return res.status(400).json({ error: 'Payment proof must be an image under 8 MB' });
+        return res.status(400).json({ error: 'Payment proof must be an image under 1.5 MB' });
       }
     }
     if (estimatedDelivery !== undefined && estimatedDelivery !== null && estimatedDelivery !== ''
@@ -114,6 +116,36 @@ router.post('/', authenticate, async (req: any, res) => {
     const deliveryFee = subtotal > 100 ? 0 : 9.99;
     const total = subtotal + deliveryFee;
 
+    // Reserve stock atomically: each decrement only succeeds if enough units
+    // remain (`$gte` inside the same update), so two concurrent checkouts can
+    // never both take the last bouquet. Any failure rolls back the units
+    // already taken — the reservation is all-or-nothing per order.
+    type Reserved = { id: any; qty: number };
+    const restock = async (list: Reserved[]) => {
+      try {
+        await Promise.all(list.map(r => Bouquet.updateOne({ _id: r.id }, { $inc: { stock: r.qty } })));
+      } catch (err) {
+        // Loud: units would otherwise be lost from the catalog.
+        console.error('Stock rollback failed:', err);
+      }
+    };
+    const reserved: Reserved[] = [];
+    for (const item of populatedItems) {
+      const updated = await Bouquet.findOneAndUpdate(
+        { _id: item.bouquet, inStock: true, stock: { $gte: item.quantity } },
+        { $inc: { stock: -item.quantity } },
+      );
+      if (!updated) {
+        await restock(reserved);
+        const missing = await Bouquet.findById(item.bouquet).select('name');
+        const label = missing ? `"${missing.name}"` : 'an item in your cart';
+        return res.status(409).json({
+          error: `Not enough stock for ${label} — try a smaller quantity or remove it from your cart.`,
+        });
+      }
+      reserved.push({ id: item.bouquet, qty: item.quantity });
+    }
+
     const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
     const now = new Date();
 
@@ -123,6 +155,7 @@ router.post('/', authenticate, async (req: any, res) => {
       total,
       deliveryFee: deliveryFee || 0,
       status: 'to-pay',
+      stockReserved: reserved.length > 0,
       customerName,
       deliveryAddress,
       phone,
@@ -139,7 +172,13 @@ router.post('/', authenticate, async (req: any, res) => {
       }],
     });
 
-    await order.save();
+    try {
+      await order.save();
+    } catch (err) {
+      // The order never existed — give the reserved units back.
+      await restock(reserved);
+      throw err;
+    }
     const populated = await order.populate('items.bouquet');
 
     // Announce the order: confirmation for the customer, an alert for each
@@ -170,11 +209,20 @@ router.post('/', authenticate, async (req: any, res) => {
 
 router.get('/', authenticate, async (req: any, res) => {
   try {
-    let query = Order.find().sort({ createdAt: -1 });
-    if (req.userRole === 'customer') {
-      query = query.where('customer').equals(req.userId);
+    const filter: any = {};
+    if (req.userRole === 'customer') filter.customer = req.userId;
+
+    const { paged, page, limit, skip } = parsePage(req, 50);
+    if (paged) {
+      // Opt-in pagination (?page=…) — the SPA keeps its full list, API clients
+      // that need pages get an envelope.
+      const [items, total] = await Promise.all([
+        Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('items.bouquet'),
+        Order.countDocuments(filter),
+      ]);
+      return res.json(envelope(items, total, page, limit));
     }
-    const orders = await query.populate('items.bouquet');
+    const orders = await Order.find(filter).sort({ createdAt: -1 }).populate('items.bouquet');
     res.json(orders);
   } catch (err: any) {
     errorResponse(res, 500, err);
@@ -226,6 +274,45 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
       }
     }
     const previousStatus = order.status;
+
+    // Stock follows cancellations. Entering 'cancelled' hands back the units
+    // this order currently holds; leaving 'cancelled' takes them again — but
+    // only if this order ever reserved any (pre-stock-tracking orders never
+    // took units, so cancelling them must not mint phantom stock).
+    if (status === 'cancelled' && previousStatus !== 'cancelled' && order.stockReserved) {
+      try {
+        for (const item of order.items) {
+          await Bouquet.updateOne({ _id: item.bouquet }, { $inc: { stock: item.quantity } });
+        }
+      } catch (err) {
+        console.error('Restock on cancel failed:', err);
+      }
+      order.stockReserved = false;
+    } else if (previousStatus === 'cancelled' && status !== 'cancelled' && !order.stockReserved) {
+      // Back into the active pipeline — reserve all-or-nothing.
+      const taken: Array<{ id: any; qty: number }> = [];
+      let blockedItem: { id: any; qty: number } | null = null;
+      for (const item of order.items) {
+        const id = (item as any).bouquet;
+        const qty = item.quantity;
+        const ok = await Bouquet.findOneAndUpdate(
+          { _id: id, inStock: true, stock: { $gte: qty } },
+          { $inc: { stock: -qty } },
+        );
+        if (!ok) { blockedItem = { id, qty }; break; }
+        taken.push({ id, qty });
+      }
+      if (blockedItem) {
+        for (const t of taken) {
+          await Bouquet.updateOne({ _id: t.id }, { $inc: { stock: t.qty } });
+        }
+        const missing = await Bouquet.findById(blockedItem.id).select('name');
+        const label = missing ? `"${missing.name}"` : 'an item on this order';
+        return res.status(409).json({ error: `Cannot reactivate — not enough stock for ${label}.` });
+      }
+      order.stockReserved = taken.length > 0;
+    }
+
     order.status = status;
     order.trackingUpdates.push({
       status,
@@ -283,6 +370,11 @@ router.patch('/:id/rate', authenticate, async (req: any, res) => {
     // signed-in user could stamp ratings and status 'rated' on anyone's order.
     if (req.userRole !== 'admin' && order.customer?.toString() !== req.userId) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+    // Rating flips status to 'rated' outside the /status route's stock logic —
+    // a cancelled order must not silently jump back into the pipeline.
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ error: 'Cancelled orders cannot be rated' });
     }
     order.rating = numericRating;
     order.ratingComment = typeof comment === 'string' ? comment.slice(0, 1000) : '';

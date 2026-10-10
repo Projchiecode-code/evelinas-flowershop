@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { CreditCard, MapPin, User, Upload, Banknote, Wallet, Truck, X, ImageIcon, LogIn, AlertCircle } from 'lucide-react';
+import { CreditCard, MapPin, User, Upload, Banknote, Wallet, Truck, X, ImageIcon, LogIn, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -13,6 +13,7 @@ import { productApi } from '../api/client';
 import { toast } from 'sonner';
 import { CartItem, PaymentMethod } from '../types';
 import { formatCurrency } from '../utils/currency';
+import { compressImage } from '../utils/imageCompress';
 
 /** Where a signed-out shopper goes to sign in, and back to checkout afterwards. */
 const LOGIN_PATH = '/login?redirect=/checkout';
@@ -98,6 +99,7 @@ export function Checkout() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
   const [proofFile, setProofFile] = useState<string | null>(null);
   const [proofFileName, setProofFileName] = useState('');
+  const [processingProof, setProcessingProof] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Set once an order exists, so the empty-cart redirect below doesn't race
   // the navigation to the confirmation page.
@@ -106,15 +108,24 @@ export function Checkout() {
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData(f => ({ ...f, [e.target.name]: e.target.value }));
 
-  const handleProofUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please upload an image file'); return; }
-    if (file.size > 5 * 1024 * 1024) { toast.error('Payment proof must be under 5 MB'); return; }
-    setProofFileName(file.name);
-    const reader = new FileReader();
-    reader.onloadend = () => setProofFile(reader.result as string);
-    reader.readAsDataURL(file);
+    if (file.size > 15 * 1024 * 1024) { toast.error('Payment proof must be under 15 MB'); return; }
+    setProcessingProof(true);
+    try {
+      // Downscale + re-encode in the browser so the stored screenshot stays
+      // well under the server's 1.5 MB cap (and the order document stays light).
+      const processed = await compressImage(file);
+      setProofFile(processed);
+      setProofFileName(file.name);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not process that image');
+    } finally {
+      setProcessingProof(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   const removeProof = () => { setProofFile(null); setProofFileName(''); if (fileRef.current) fileRef.current.value = ''; };
@@ -170,11 +181,17 @@ export function Checkout() {
       // Session expired between page load and submit (or the cookie was cleared).
       const status = (err as { status?: number })?.status;
       if (status === 401 || /no token|unauthorized|not authorized/i.test(String((err as Error)?.message))) {
-        toast.error('Your session has expired. Please sign in again to place your order.');
+        toast.error('Your session has expired. Please sign in again to place an order.');
         navigate(LOGIN_PATH);
         return;
       }
-      toast.error(err instanceof CheckoutError ? err.message : 'We could not place your order. Please try again.');
+      // API errors carry a customer-readable message (e.g. the server's
+      // "not enough stock" 409) — prefer it over a generic fallback.
+      const serverMessage = status ? String((err as Error)?.message || '').trim() : '';
+      toast.error(
+        err instanceof CheckoutError ? err.message
+          : serverMessage || 'We could not place your order. Please try again.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -338,11 +355,22 @@ export function Checkout() {
                           <button
                             type="button"
                             onClick={() => fileRef.current?.click()}
-                            className="mt-2 w-full border-2 border-dashed border-pink-300 rounded-2xl p-8 text-center hover:border-rose-400 hover:bg-rose-50 transition-all group"
+                            disabled={processingProof}
+                            className="mt-2 w-full border-2 border-dashed border-pink-300 rounded-2xl p-8 text-center hover:border-rose-400 hover:bg-rose-50 transition-all group disabled:opacity-60"
                           >
-                            <Upload className="w-8 h-8 text-pink-400 mx-auto mb-2 group-hover:text-rose-500" />
-                            <p className="text-gray-600 font-medium">Click to upload payment screenshot</p>
-                            <p className="text-xs text-gray-400 mt-1">JPG, PNG, GIF accepted</p>
+                            {processingProof ? (
+                              <>
+                                <Loader2 className="w-8 h-8 text-rose-400 mx-auto mb-2 animate-spin" />
+                                <p className="text-gray-600 font-medium">Optimizing screenshot…</p>
+                                <p className="text-xs text-gray-400 mt-1">Shrinking it for faster upload</p>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-8 h-8 text-pink-400 mx-auto mb-2 group-hover:text-rose-500" />
+                                <p className="text-gray-600 font-medium">Click to upload payment screenshot</p>
+                                <p className="text-xs text-gray-400 mt-1">JPG, PNG, GIF accepted</p>
+                              </>
+                            )}
                           </button>
                         ) : (
                           <div className="mt-2 relative rounded-2xl overflow-hidden border-2 border-rose-300">
@@ -423,7 +451,7 @@ export function Checkout() {
                       </div>
                     </div>
 
-                    <Button type="submit" size="lg" disabled={submitting} className="w-full bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white">
+                    <Button type="submit" size="lg" disabled={submitting || processingProof} className="w-full bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white">
                       {submitting ? (
                         <span className="flex items-center gap-2"><span className="animate-spin">🌸</span> Placing order...</span>
                       ) : (

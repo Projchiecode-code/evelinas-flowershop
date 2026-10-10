@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Notification from '../models/Notification';
 import { errorResponse } from '../utils/httpError';
 import { authenticate } from '../middleware/auth';
+import { parsePage, envelope } from '../utils/pagination';
 
 const router = Router();
 
@@ -36,20 +37,32 @@ router.post('/', authenticate, async (req: any, res) => {
   }
 });
 
+// Broadcasts are shared: expose read state as seen by THIS viewer.
+const shapeForViewer = (req: any) => (doc: any) => {
+  const obj = doc.toObject();
+  if (obj.user == null) obj.read = (obj.readBy || []).includes(req.userId);
+  return obj;
+};
+
 router.get('/', authenticate, async (req: any, res) => {
   try {
-    let query = Notification.find().sort({ createdAt: -1 }).limit(50);
+    const filter: any = {};
     if (req.userRole === 'customer') {
       // Own notifications plus shop-wide broadcasts (user: null).
-      query = query.where('user').in([req.userId, null]);
+      filter.$or = [{ user: req.userId }, { user: null }];
     }
-    const notifications = await query;
+    const { paged, page, limit, skip } = parsePage(req, 50);
+    let query = Notification.find(filter).sort({ createdAt: -1 });
+    if (paged) {
+      const [items, total] = await Promise.all([
+        query.skip(skip).limit(limit),
+        Notification.countDocuments(filter),
+      ]);
+      return res.json(envelope(items.map(shapeForViewer(req)), total, page, limit));
+    }
+    const notifications = await query.limit(50);
     // Broadcasts are shared: expose read state as seen by THIS viewer.
-    res.json(notifications.map(doc => {
-      const obj = doc.toObject();
-      if (obj.user == null) obj.read = (obj.readBy || []).includes(req.userId);
-      return obj;
-    }));
+    res.json(notifications.map(shapeForViewer(req)));
   } catch (err: any) {
     errorResponse(res, 500, err);
   }

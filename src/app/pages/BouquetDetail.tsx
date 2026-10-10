@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { AIRecommendationEngine, buildSignals } from '../utils/aiRecommendations';
 import { recordView, getRecentViews } from '../utils/viewHistory';
 import { toast } from 'sonner';
+import { compressImage } from '../utils/imageCompress';
 
 function StarRating({ value, onChange }: { value: number; onChange?: (v: number) => void }) {
   const [hover, setHover] = useState(0);
@@ -56,6 +57,7 @@ export function BouquetDetail() {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
+  const [processingPhotos, setProcessingPhotos] = useState(false);
   const reviewFileRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'reviews' | 'gallery'>('details');
 
@@ -94,9 +96,14 @@ export function BouquetDetail() {
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const fav = isFavorite(bouquet.id);
   const minDate = new Date(); minDate.setDate(minDate.getDate() + 1);
+  // Units left to buy — 0 means the CTA below already reads "Out of Stock".
+  const maxStock = Math.max(1, bouquet.stock);
 
   const handleAddToCart = () => {
-    addToCart(bouquet, quantity, customMessage, deliveryDate);
+    // Never let a stale quantity (e.g. stock dropped while this page was open)
+    // reach the cart — the server would only reject it at checkout anyway.
+    const qty = Math.min(quantity, maxStock);
+    addToCart(bouquet, qty, customMessage, deliveryDate);
     toast.success(`${bouquet.name} added to cart!`);
   };
 
@@ -105,17 +112,29 @@ export function BouquetDetail() {
     toast.success(fav ? 'Removed from favorites' : 'Added to favorites!');
   };
 
-  const handleReviewPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReviewPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    // Server allows 5 photos at 3 MB each — enforce both here for instant feedback.
+    // Server allows 5 photos; each is compressed in the browser before upload.
     const room = 5 - reviewPhotos.length;
     if (files.length > room) toast.error('You can attach up to 5 photos');
-    files.slice(0, Math.max(0, room)).forEach(file => {
-      if (file.size > 2 * 1024 * 1024) { toast.error('Each photo must be under 2 MB'); return; }
-      const reader = new FileReader();
-      reader.onloadend = () => setReviewPhotos(prev => [...prev, reader.result as string]);
-      reader.readAsDataURL(file);
-    });
+    const chosen = files.slice(0, Math.max(0, room));
+    if (chosen.length === 0) { if (e.target) e.target.value = ''; return; }
+    setProcessingPhotos(true);
+    try {
+      const processed: string[] = [];
+      for (const file of chosen) {
+        if (file.size > 15 * 1024 * 1024) { toast.error('Each photo must be under 15 MB'); continue; }
+        try {
+          processed.push(await compressImage(file));
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : `Could not process ${file.name}`);
+        }
+      }
+      if (processed.length) setReviewPhotos(prev => [...prev, ...processed]);
+    } finally {
+      setProcessingPhotos(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   const handleReviewSubmit = (e: React.FormEvent) => {
@@ -186,8 +205,15 @@ export function BouquetDetail() {
               <div className="flex items-center gap-3">
                 <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-9 h-9 rounded-xl border border-pink-200 text-gray-700 font-bold hover:border-rose-400 hover:bg-rose-50 transition-all">−</button>
                 <span className="w-10 text-center font-bold text-gray-800">{quantity}</span>
-                <button onClick={() => setQuantity(quantity + 1)} className="w-9 h-9 rounded-xl border border-pink-200 text-gray-700 font-bold hover:border-rose-400 hover:bg-rose-50 transition-all">+</button>
+                <button
+                  onClick={() => setQuantity(Math.min(maxStock, quantity + 1))}
+                  disabled={quantity >= maxStock}
+                  className="w-9 h-9 rounded-xl border border-pink-200 text-gray-700 font-bold hover:border-rose-400 hover:bg-rose-50 transition-all disabled:opacity-40 disabled:hover:bg-white"
+                >+</button>
               </div>
+              {bouquet.inStock && maxStock <= 5 && (
+                <p className="text-sm text-amber-600 font-medium mt-2">⚠️ Only {maxStock} left in stock</p>
+              )}
             </div>
 
             {/* Delivery date */}
@@ -318,8 +344,12 @@ export function BouquetDetail() {
                     {/* Photo attachments */}
                     <div>
                       <input ref={reviewFileRef} type="file" accept="image/*" multiple onChange={handleReviewPhotoUpload} className="hidden" />
-                      <button type="button" onClick={() => reviewFileRef.current?.click()} className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700 font-medium">
-                        <ImageIcon className="w-4 h-4" /> Attach Photos (optional)
+                      <button type="button" onClick={() => reviewFileRef.current?.click()} disabled={processingPhotos} className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700 font-medium disabled:opacity-60">
+                        {processingPhotos ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Optimizing photos…</>
+                        ) : (
+                          <><ImageIcon className="w-4 h-4" /> Attach Photos (optional)</>
+                        )}
                       </button>
                       {reviewPhotos.length > 0 && (
                         <div className="flex gap-2 mt-2 flex-wrap">

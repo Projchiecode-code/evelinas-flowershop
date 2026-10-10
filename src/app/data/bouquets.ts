@@ -11,6 +11,7 @@ export const bouquets: Bouquet[] = [
     occasion: ["Birthday", "Anniversary", "Romance"],
     popularity: 95,
     inStock: true,
+    stock: 10,
     flowers: ["Pink Roses", "Baby's Breath", "Eucalyptus"]
   },
   {
@@ -23,6 +24,7 @@ export const bouquets: Bouquet[] = [
     occasion: ["Romance", "Valentine's Day", "Anniversary"],
     popularity: 100,
     inStock: true,
+    stock: 10,
     flowers: ["Red Roses", "Greenery"]
   },
   {
@@ -35,6 +37,7 @@ export const bouquets: Bouquet[] = [
     occasion: ["Wedding", "Sympathy", "Get Well"],
     popularity: 85,
     inStock: true,
+    stock: 10,
     flowers: ["White Lilies", "White Roses", "Green Foliage"]
   },
   {
@@ -47,6 +50,7 @@ export const bouquets: Bouquet[] = [
     occasion: ["Birthday", "Thank You", "Congratulations"],
     popularity: 90,
     inStock: true,
+    stock: 10,
     flowers: ["Sunflowers", "Yellow Daisies"]
   },
   {
@@ -59,6 +63,7 @@ export const bouquets: Bouquet[] = [
     occasion: ["Birthday", "Spring", "Mother's Day"],
     popularity: 88,
     inStock: true,
+    stock: 10,
     flowers: ["Purple Tulips", "White Tulips"]
   },
   {
@@ -71,6 +76,7 @@ export const bouquets: Bouquet[] = [
     occasion: ["Birthday", "Congratulations", "Thank You"],
     popularity: 92,
     inStock: true,
+    stock: 10,
     flowers: ["Roses", "Lilies", "Carnations", "Daisies", "Greenery"]
   },
   {
@@ -83,6 +89,7 @@ export const bouquets: Bouquet[] = [
     occasion: ["Anniversary", "Luxury Gift", "Corporate"],
     popularity: 80,
     inStock: true,
+    stock: 10,
     flowers: ["Phalaenopsis Orchids", "Tropical Foliage"]
   },
   {
@@ -95,6 +102,7 @@ export const bouquets: Bouquet[] = [
     occasion: ["Wedding", "Romance", "Mother's Day"],
     popularity: 95,
     inStock: true,
+    stock: 10,
     flowers: ["Pink Peonies", "Garden Roses", "Ranunculus"]
   }
 ];

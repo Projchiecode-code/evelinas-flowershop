@@ -20,7 +20,7 @@ interface ProductsContextType {
 const ProductsContext = createContext<ProductsContextType | undefined>(undefined);
 
 /** Only these keys are sent to the API — the Mongoose schema owns the rest. */
-const PRODUCT_FIELDS = ['name', 'description', 'price', 'image', 'category', 'occasion', 'popularity', 'inStock', 'flowers'] as const;
+const PRODUCT_FIELDS = ['name', 'description', 'price', 'image', 'category', 'occasion', 'popularity', 'inStock', 'stock', 'flowers'] as const;
 
 const toPayload = (draft: ProductDraft) => {
   const payload: Record<string, unknown> = {};
@@ -30,11 +30,19 @@ const toPayload = (draft: ProductDraft) => {
   });
   payload.price = Number(payload.price) || 0;
   payload.popularity = Number(payload.popularity) || 0;
+  // Whole, non-negative units only — the server validates again anyway.
+  payload.stock = Math.max(0, Math.floor(Number(payload.stock) || 0));
   return payload;
 };
 
 /** API docs arrive as Mongo documents (`_id`, loose fields) — normalise to `Bouquet`. */
 export function normalizeBouquet(raw: any): Bouquet {
+  // Products created before quantity tracking (or served from the bundled
+  // seed) may not carry `stock` — assume the schema default, or 0 when the
+  // admin has explicitly marked the item out of stock.
+  const stock = typeof raw?.stock === 'number' && Number.isFinite(raw.stock)
+    ? Math.max(0, Math.floor(raw.stock))
+    : (raw?.inStock === false ? 0 : 10);
   return {
     id: String(raw?.id || raw?._id || ''),
     name: String(raw?.name ?? ''),
@@ -44,7 +52,10 @@ export function normalizeBouquet(raw: any): Bouquet {
     category: String(raw?.category ?? 'Mixed'),
     occasion: Array.isArray(raw?.occasion) ? raw.occasion.map(String) : [],
     popularity: Number(raw?.popularity) || 0,
-    inStock: raw?.inStock !== false,
+    // Availability = manual toggle AND units left, so everything downstream
+    // (cards, buttons, AI rules) keeps reading one flag.
+    inStock: raw?.inStock !== false && stock > 0,
+    stock,
     flowers: Array.isArray(raw?.flowers) ? raw.flowers.map(String) : [],
   };
 }

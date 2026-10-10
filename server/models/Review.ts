@@ -15,4 +15,8 @@ const reviewSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
+// Product page loads "approved reviews for this bouquet"; the admin feed is newest first.
+reviewSchema.index({ bouquet: 1, approved: 1 });
+reviewSchema.index({ createdAt: -1 });
+
 export default mongoose.model('Review', reviewSchema);

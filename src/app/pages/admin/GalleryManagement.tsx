@@ -5,7 +5,7 @@ import { Badge } from '../../components/ui/badge';
 import { useGallery } from '../../contexts/GalleryContext';
 
 export function GalleryManagement() {
-  const { photos, comments, approvePhoto, deletePhoto, featurePhoto, approveComment, deleteComment } = useGallery();
+  const { photos, comments, approvePhoto, deletePhoto, featurePhoto, approveComment, deleteComment, totalPosts, hasMore, isLoadingMore, loadMore } = useGallery();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'featured'>('all');
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -44,7 +44,10 @@ export function GalleryManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Gallery Management</h1>
-          <p className="text-gray-500 text-sm">{photos.length} total photos</p>
+          <p className="text-gray-500 text-sm">
+            {totalPosts} total photos
+            {hasMore && <span> · showing newest {photos.length} — load older below</span>}
+          </p>
         </div>
         {pendingComments > 0 && (
           <Badge className="bg-amber-100 text-amber-700 border-amber-200">
@@ -191,6 +194,18 @@ export function GalleryManagement() {
           <div className="py-16 text-center text-gray-400">
             <Camera className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p>No photos found.</p>
+          </div>
+        )}
+        {/* Older submissions arrive one page at a time. */}
+        {hasMore && (
+          <div className="text-center pt-2">
+            <button
+              onClick={loadMore}
+              disabled={isLoadingMore}
+              className="px-4 py-2 rounded-xl text-sm font-semibold border border-pink-200 text-gray-600 hover:border-rose-300 hover:bg-rose-50 transition-all disabled:opacity-60"
+            >
+              {isLoadingMore ? 'Loading…' : 'Load older photos'}
+            </button>
           </div>
         )}
       </div>

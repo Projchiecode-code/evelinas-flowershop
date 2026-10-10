@@ -38,7 +38,12 @@ export function BouquetCard({ bouquet, showRecommendation, recommendationText }:
               <Badge variant="secondary" className="text-lg">Out of Stock</Badge>
             </div>
           )}
-          {bouquet.popularity > 90 && bouquet.inStock && (
+          {bouquet.inStock && bouquet.stock <= 5 && (
+            <Badge className="absolute top-2 right-2 bg-amber-100 text-amber-800 border-amber-200">
+              Only {bouquet.stock} left
+            </Badge>
+          )}
+          {bouquet.popularity > 90 && bouquet.inStock && bouquet.stock > 5 && (
             <Badge className="absolute top-2 right-2 bg-yellow-400 text-yellow-900">
               <Star className="w-3 h-3 mr-1 fill-current" /> Popular
             </Badge>

@@ -14,4 +14,8 @@ const gallerySchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
+// Public feed = approved + newest; admin feed = newest (pagination scans in order).
+gallerySchema.index({ approved: 1, createdAt: -1 });
+gallerySchema.index({ createdAt: -1 });
+
 export default mongoose.model('GalleryPhoto', gallerySchema);

@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { GalleryPhoto, GalleryComment } from '../types';
 import { galleryApi } from '../api/client';
 import { mockGallery } from '../data/gallery';
+import { useAuth } from './AuthContext';
+
+// One page of the feed. Every photo carries its own image payload (data URL),
+// so the gallery never ships its whole contents at once — the SPA asks for
+// pages and appends with "Load more".
+const PAGE_SIZE = 12;
 
 const INITIAL_COMMENTS: GalleryComment[] = [
   { id: 'c1', photoId: 'g1', authorName: 'Maria G.', text: 'So beautiful! Where did you get this? 😍', createdAt: new Date('2026-06-02'), approved: true },
@@ -17,6 +23,12 @@ interface GalleryContextType {
   photos: GalleryPhoto[];
   comments: GalleryComment[];
   isLoading: boolean;
+  /** Server-side count of real photos (demo posts excluded), all pages. */
+  totalPosts: number;
+  /** Whether older photos exist beyond the pages already loaded. */
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  loadMore: () => Promise<void>;
   submitPhoto: (photo: Omit<GalleryPhoto, 'id' | 'createdAt' | 'approved' | 'featured' | 'likes'>) => Promise<void>;
   approvePhoto: (id: string) => Promise<void>;
   deletePhoto: (id: string) => Promise<void>;
@@ -46,37 +58,106 @@ function normalizePhoto(raw: any): GalleryPhoto {
   } as GalleryPhoto;
 }
 
+interface GalleryPage {
+  items?: any[];
+  total?: number;
+  page?: number;
+  pages?: number;
+}
+
 export function GalleryProvider({ children }: { children: ReactNode }) {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
+  const [featuredPhotos, setFeaturedPhotos] = useState<GalleryPhoto[]>([]);
   const [comments, setComments] = useState<GalleryComment[]>(INITIAL_COMMENTS);
   const [isLoading, setIsLoading] = useState(true);
+  const [totalPosts, setTotalPosts] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const { user } = useAuth();
+  const role = user?.role;
+  // Which endpoint the currently loaded pages came from (admin sees pending
+  // submissions too; guests and customers only see approved photos).
+  const endpointRef = useRef('/gallery/approved');
+  const loadedRef = useRef(false);
+
+  const mockFeatured = () => mockGallery.filter(p => p.approved && p.featured);
 
   const fetchGallery = async () => {
     try {
       setIsLoading(true);
-      const apiPhotos = await galleryApi.getAll();
-      // Combine mock gallery with API photos (API photos first for newest)
-      const combinedPhotos = [
-        ...(Array.isArray(apiPhotos) ? apiPhotos : []).map(normalizePhoto),
-        ...mockGallery,
-      ];
-      setPhotos(combinedPhotos);
+      const base = role === 'admin' ? '/gallery' : '/gallery/approved';
+      endpointRef.current = base;
+      const first = (await galleryApi.getPage(base, 1, PAGE_SIZE)) as GalleryPage;
+      const items = (Array.isArray(first?.items) ? first!.items : []).map(normalizePhoto);
+      // Demo posts ride along with the public first page only (they never
+      // paginate) — the admin moderation list shows real submissions, whose
+      // ids actually resolve against the API.
+      setPhotos(role === 'admin' ? items : [...items, ...mockGallery]);
+      setTotalPosts(Number(first?.total) || 0);
+      setPage(1);
+      setHasMore(Number(first?.page || 1) < Number(first?.pages || 1));
+      loadedRef.current = true;
+
+      // Featured is fetched separately so the home page's section never depends
+      // on which feed page happens to be loaded (featured posts are often old).
+      try {
+        const feat = (await galleryApi.getFeatured()) as any[];
+        setFeaturedPhotos([
+          ...(Array.isArray(feat) ? feat : []).map(normalizePhoto),
+          ...mockFeatured(),
+        ]);
+      } catch {
+        setFeaturedPhotos([...items.filter(p => p.approved && p.featured), ...mockFeatured()]);
+      }
     } catch (err) {
       console.error('Failed to fetch gallery:', err);
-      setPhotos(mockGallery);
+      setPhotos(role === 'admin' ? [] : mockGallery);
+      setFeaturedPhotos(mockFeatured());
+      setHasMore(false);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    const base = role === 'admin' ? '/gallery' : '/gallery/approved';
+    // Skip the redundant fetch when the endpoint can't have changed (a
+    // customer session resolving after the guest load) — but never skip the
+    // first one, and always refetch when admin rights appear or disappear.
+    if (loadedRef.current && base === endpointRef.current) return;
     fetchGallery();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
+
+  const loadMore = async () => {
+    if (isLoadingMore || !hasMore) return;
+    try {
+      setIsLoadingMore(true);
+      const next = page + 1;
+      const res = (await galleryApi.getPage(endpointRef.current, next, PAGE_SIZE)) as GalleryPage;
+      const items = (Array.isArray(res?.items) ? res!.items : []).map(normalizePhoto);
+      setPhotos(prev => {
+        const seen = new Set(prev.map(p => p.id));
+        return [...prev, ...items.filter(p => !seen.has(p.id))];
+      });
+      setPage(Number(res?.page) || next);
+      setHasMore(Number(res?.page || next) < Number(res?.pages || next));
+    } catch (err) {
+      console.error('Failed to load more gallery photos:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const submitPhoto = async (data: Omit<GalleryPhoto, 'id' | 'createdAt' | 'approved' | 'featured' | 'likes'>) => {
     try {
       const res = await galleryApi.submit(data);
       setPhotos(prev => [normalizePhoto(res), ...prev]);
+      // New submissions start unapproved: the admin total counts everything,
+      // the public (approved-only) total doesn't move until moderation.
+      if (role === 'admin') setTotalPosts(t => t + 1);
     } catch (err) {
       console.error('Submit photo failed:', err);
     }
@@ -95,6 +176,7 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
     try {
       await galleryApi.delete(id);
       setPhotos(prev => prev.filter(p => p.id !== id));
+      setTotalPosts(t => Math.max(0, t - 1));
     } catch (err) {
       console.error('Delete photo failed:', err);
     }
@@ -104,6 +186,15 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
     try {
       const res = await galleryApi.feature(id);
       setPhotos(prev => prev.map(p => p.id === id ? normalizePhoto(res) : p));
+      // Keep the home page's featured strip in sync with moderation toggles.
+      setFeaturedPhotos(prev => {
+        const next = prev.filter(p => p.id !== id);
+        if (featured) {
+          const promoted = photos.find(p => p.id === id);
+          if (promoted) next.unshift(normalizePhoto({ ...promoted, featured: true }));
+        }
+        return next;
+      });
     } catch (err) {
       console.error('Feature photo failed:', err);
     }
@@ -112,7 +203,9 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const likePhoto = async (id: string) => {
     try {
       const res = await galleryApi.like(id);
-      setPhotos(prev => prev.map(p => p.id === id ? normalizePhoto(res) : p));
+      const updated = normalizePhoto(res);
+      setPhotos(prev => prev.map(p => p.id === id ? updated : p));
+      setFeaturedPhotos(prev => prev.map(p => p.id === id ? updated : p));
     } catch (err) {
       console.error('Like photo failed:', err);
     }
@@ -141,14 +234,19 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
 
   const getApprovedPhotos = () => photos.filter(p => p.approved);
 
-  const getFeaturedPhotos = () => photos.filter(p => p.approved && p.featured);
+  const getFeaturedPhotos = () => featuredPhotos;
 
   const refetch = async () => {
     await fetchGallery();
   };
 
   return (
-    <GalleryContext.Provider value={{ photos, comments, isLoading, submitPhoto, approvePhoto, deletePhoto, featurePhoto, likePhoto, addComment, deleteComment, approveComment, getCommentsForPhoto, getAllComments, getApprovedPhotos, getFeaturedPhotos, refetch }}>
+    <GalleryContext.Provider value={{
+      photos, comments, isLoading, totalPosts, hasMore, isLoadingMore, loadMore,
+      submitPhoto, approvePhoto, deletePhoto, featurePhoto, likePhoto,
+      addComment, deleteComment, approveComment, getCommentsForPhoto,
+      getAllComments, getApprovedPhotos, getFeaturedPhotos, refetch,
+    }}>
       {children}
     </GalleryContext.Provider>
   );
@@ -156,6 +254,6 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
 
 export function useGallery() {
   const ctx = useContext(GalleryContext);
-  if (!ctx) throw new Error('useGallery must be used within GalleryProvider');
+  if (!ctx) throw new Error('useGallery must be used within a GalleryProvider');
   return ctx;
 }

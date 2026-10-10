@@ -2,11 +2,14 @@ import { Router } from 'express';
 import GalleryPhoto from '../models/GalleryPhoto';
 import { errorResponse } from '../utils/httpError';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { parsePage, envelope } from '../utils/pagination';
 
 const router = Router();
 
 // Moderation (approve/feature/delete) is admin-only — anyone could otherwise
 // approve their own unapproved submission. Liking stays public for guests.
+// The LIST route below is admin-only too: unapproved submissions carry the
+// customer's full-size photo, which the public feed must never receive.
 
 router.post('/', authenticate, async (req: any, res) => {
   try {
@@ -15,10 +18,11 @@ router.post('/', authenticate, async (req: any, res) => {
       return res.status(400).json({ error: 'Image URL is required' });
     }
     // Uploads arrive as data URLs (images only); plain http(s) links also OK.
-    // The cap keeps one submission from approaching Mongo's 16 MB doc limit.
-    if (imageUrl.length > 9_000_000
+    // The browser compresses photos to ~1600px before sending — this cap keeps
+    // one submission from approaching Mongo's 16 MB doc limit.
+    if (imageUrl.length > 1_500_000
       || !(imageUrl.startsWith('data:image/') || /^https?:\/\//.test(imageUrl))) {
-      return res.status(400).json({ error: 'Image must be an image file under 9 MB' });
+      return res.status(400).json({ error: 'Image must be an image file under 1.5 MB' });
     }
     const photo = new GalleryPhoto({
       bouquet: bouquetId || undefined,
@@ -38,8 +42,17 @@ router.post('/', authenticate, async (req: any, res) => {
   }
 });
 
-router.get('/', async (_req, res) => {
+// Full list (including unapproved submissions) — admin moderation only.
+router.get('/', authenticate, requireAdmin, async (req, res) => {
   try {
+    const { paged, page, limit, skip } = parsePage(req, 20);
+    if (paged) {
+      const [items, total] = await Promise.all([
+        GalleryPhoto.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
+        GalleryPhoto.countDocuments(),
+      ]);
+      return res.json(envelope(items, total, page, limit));
+    }
     const photos = await GalleryPhoto.find().sort({ createdAt: -1 });
     res.json(photos);
   } catch (err: any) {
@@ -47,8 +60,18 @@ router.get('/', async (_req, res) => {
   }
 });
 
-router.get('/approved', async (_req, res) => {
+// Public feed — the shop's customer photos. Paginated by the SPA (each photo
+// carries its full image payload, so the feed never ships everything at once).
+router.get('/approved', async (req, res) => {
   try {
+    const { paged, page, limit, skip } = parsePage(req, 12, 48);
+    if (paged) {
+      const [items, total] = await Promise.all([
+        GalleryPhoto.find({ approved: true }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        GalleryPhoto.countDocuments({ approved: true }),
+      ]);
+      return res.json(envelope(items, total, page, limit));
+    }
     const photos = await GalleryPhoto.find({ approved: true }).sort({ createdAt: -1 });
     res.json(photos);
   } catch (err: any) {
@@ -56,8 +79,17 @@ router.get('/approved', async (_req, res) => {
   }
 });
 
-router.get('/featured', async (_req, res) => {
+// Curated set for the home page — small by nature (admin-featured only).
+router.get('/featured', async (req, res) => {
   try {
+    const { paged, page, limit, skip } = parsePage(req, 24);
+    if (paged) {
+      const [items, total] = await Promise.all([
+        GalleryPhoto.find({ approved: true, featured: true }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        GalleryPhoto.countDocuments({ approved: true, featured: true }),
+      ]);
+      return res.json(envelope(items, total, page, limit));
+    }
     const photos = await GalleryPhoto.find({ approved: true, featured: true }).sort({ createdAt: -1 });
     res.json(photos);
   } catch (err: any) {

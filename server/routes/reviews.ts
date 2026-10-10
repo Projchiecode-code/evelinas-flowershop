@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Review from '../models/Review';
 import { errorResponse } from '../utils/httpError';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { parsePage, envelope } from '../utils/pagination';
 
 const router = Router();
 
@@ -28,8 +29,10 @@ router.post('/', authenticate, async (req: any, res) => {
         return res.status(400).json({ error: 'You can attach up to 5 photos' });
       }
       for (const photo of photos) {
-        if (typeof photo !== 'string' || photo.length > 3_000_000 || !photo.startsWith('data:image/')) {
-          return res.status(400).json({ error: 'Each photo must be an image under 3 MB' });
+        // Browser-side compression keeps real uploads far under this — the cap
+        // is the backstop that keeps one review away from Mongo's 16 MB doc limit.
+        if (typeof photo !== 'string' || photo.length > 1_500_000 || !photo.startsWith('data:image/')) {
+          return res.status(400).json({ error: 'Each photo must be an image under 1.5 MB' });
         }
       }
     }
@@ -53,8 +56,16 @@ router.post('/', authenticate, async (req: any, res) => {
   }
 });
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
+    const { paged, page, limit, skip } = parsePage(req, 20);
+    if (paged) {
+      const [items, total] = await Promise.all([
+        Review.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
+        Review.countDocuments(),
+      ]);
+      return res.json(envelope(items, total, page, limit));
+    }
     const reviews = await Review.find().sort({ createdAt: -1 });
     res.json(reviews);
   } catch (err: any) {

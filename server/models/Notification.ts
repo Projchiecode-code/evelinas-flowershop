@@ -14,4 +14,8 @@ const notificationSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
+// The bell loads "this user's + broadcasts, newest first" on every app open.
+notificationSchema.index({ user: 1, createdAt: -1 });
+notificationSchema.index({ createdAt: -1 });
+
 export default mongoose.model('Notification', notificationSchema);

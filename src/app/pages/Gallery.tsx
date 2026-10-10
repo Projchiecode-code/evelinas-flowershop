@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Heart, Upload, Camera, Star, X, ShoppingCart, MessageCircle, Send, ChevronDown, ChevronUp, MoreHorizontal, Share2 } from 'lucide-react';
+import { Heart, Upload, Camera, Star, X, ShoppingCart, MessageCircle, Send, ChevronDown, ChevronUp, MoreHorizontal, Share2, Loader2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -10,6 +10,7 @@ import { useProducts } from '../contexts/ProductsContext';
 import { GalleryPhoto } from '../types';
 import { toast } from 'sonner';
 import { formatCurrency } from '../utils/currency';
+import { compressImage } from '../utils/imageCompress';
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
 function PostCard({ photo }: { photo: GalleryPhoto }) {
@@ -205,25 +206,36 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
 // ─── Main Gallery Page ────────────────────────────────────────────────────────
 export function Gallery() {
   const { bouquets } = useProducts();
-  const { getApprovedPhotos, submitPhoto } = useGallery();
+  const { getApprovedPhotos, getFeaturedPhotos, submitPhoto, hasMore, isLoadingMore, loadMore } = useGallery();
   const [filter, setFilter] = useState<'all' | 'featured'>('all');
   const [showSubmit, setShowSubmit] = useState(false);
   const [form, setForm] = useState({ customerName: '', caption: '', bouquetId: '' });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [processingPhoto, setProcessingPhoto] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const photos = getApprovedPhotos();
-  const displayed = filter === 'featured' ? photos.filter(p => p.featured) : photos;
+  const featured = getFeaturedPhotos();
+  const displayed = filter === 'featured' ? featured : photos;
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please upload an image file'); return; }
-    // Data URLs grow ~4/3 — 6 MB keeps the submission well under the server's cap.
-    if (file.size > 6 * 1024 * 1024) { toast.error('Photo must be under 6 MB'); return; }
-    const reader = new FileReader();
-    reader.onloadend = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(file);
+    // Sanity cap before the (lossy) downscale — real phone photos sit far below.
+    if (file.size > 15 * 1024 * 1024) { toast.error('Photo must be under 15 MB'); return; }
+    setProcessingPhoto(true);
+    try {
+      // Downscale + re-encode in the browser (~1600 px, ≤1.4M chars) so the
+      // submission stays tiny in the database.
+      const processed = await compressImage(file);
+      setImagePreview(processed);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not process that photo');
+    } finally {
+      setProcessingPhoto(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -290,10 +302,20 @@ export function Gallery() {
               {/* Photo */}
               <input ref={fileRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               {!imagePreview ? (
-                <button type="button" onClick={() => fileRef.current?.click()} className="w-full border-2 border-dashed border-pink-300 rounded-2xl p-8 text-center hover:border-rose-400 hover:bg-rose-50 transition-all">
-                  <Camera className="w-8 h-8 text-pink-300 mx-auto mb-2" />
-                  <p className="text-gray-500 text-sm font-medium">Add Photo *</p>
-                  <p className="text-xs text-gray-400 mt-0.5">JPG, PNG accepted</p>
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={processingPhoto} className="w-full border-2 border-dashed border-pink-300 rounded-2xl p-8 text-center hover:border-rose-400 hover:bg-rose-50 transition-all disabled:opacity-60">
+                  {processingPhoto ? (
+                    <>
+                      <Loader2 className="w-8 h-8 text-rose-400 mx-auto mb-2 animate-spin" />
+                      <p className="text-gray-500 text-sm font-medium">Optimizing photo…</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Shrinking it for faster sharing</p>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-8 h-8 text-pink-300 mx-auto mb-2" />
+                      <p className="text-gray-500 text-sm font-medium">Add Photo *</p>
+                      <p className="text-xs text-gray-400 mt-0.5">JPG, PNG accepted</p>
+                    </>
+                  )}
                 </button>
               ) : (
                 <div className="relative rounded-2xl overflow-hidden">
@@ -301,7 +323,7 @@ export function Gallery() {
                   <button type="button" onClick={() => setImagePreview(null)} className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md"><X className="w-4 h-4 text-gray-600" /></button>
                 </div>
               )}
-              <Button type="submit" className="w-full bg-gradient-to-r from-rose-500 to-purple-500 text-white font-semibold">Post to Community</Button>
+              <Button type="submit" disabled={processingPhoto} className="w-full bg-gradient-to-r from-rose-500 to-purple-500 text-white font-semibold">Post to Community</Button>
             </form>
           </div>
         </div>
@@ -313,7 +335,7 @@ export function Gallery() {
         <div className="flex items-center gap-3 mb-6">
           {(['all', 'featured'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} className={`px-5 py-2 rounded-full text-sm font-semibold border transition-all ${filter === f ? 'bg-rose-500 text-white border-rose-500' : 'bg-white border-pink-200 text-gray-600 hover:border-rose-300'}`}>
-              {f === 'all' ? `All Posts (${photos.length})` : `⭐ Featured (${photos.filter(p => p.featured).length})`}
+              {f === 'all' ? `All Posts (${photos.length})` : `⭐ Featured (${featured.length})`}
             </button>
           ))}
         </div>
@@ -330,6 +352,24 @@ export function Gallery() {
             displayed.map(photo => <PostCard key={photo.id} photo={photo} />)
           )}
         </div>
+
+        {/* Older posts load on demand — the feed ships one page at a time. */}
+        {filter === 'all' && hasMore && (
+          <div className="text-center pt-6">
+            <Button
+              onClick={loadMore}
+              disabled={isLoadingMore}
+              variant="outline"
+              className="border-pink-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300"
+            >
+              {isLoadingMore ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading…</>
+              ) : (
+                'Load more posts'
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import User from '../models/User';
 import { errorResponse } from '../utils/httpError';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { parsePage, envelope } from '../utils/pagination';
 
 const router = Router();
 
@@ -63,6 +64,14 @@ router.patch('/me', authenticate, async (req: any, res) => {
 // customer-facing code calls /users apart from the self-edit route above.)
 router.get('/', authenticate, requireAdmin, async (req: any, res) => {
   try {
+    const { paged, page, limit, skip } = parsePage(req, 50);
+    if (paged) {
+      const [items, total] = await Promise.all([
+        User.find().select('-password').sort({ createdAt: -1 }).skip(skip).limit(limit),
+        User.countDocuments(),
+      ]);
+      return res.json(envelope(items, total, page, limit));
+    }
     const users = await User.find().select('-password').sort({ createdAt: -1 });
     res.json(users);
   } catch (err: any) {

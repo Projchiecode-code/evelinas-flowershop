@@ -10,6 +10,7 @@ import reviewRoutes from './routes/reviews';
 import galleryRoutes from './routes/gallery';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
+import Bouquet from './models/Bouquet';
 import { getJwtSecret } from './middleware/auth';
 import { errorResponse } from './utils/httpError';
 import helmet from 'helmet';
@@ -59,7 +60,17 @@ const start = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/evelinas-flowershop');
     console.log('MongoDB connected');
-    
+
+    // One-time stock backfill for products created before quantity tracking:
+    // only touches docs where `stock` is missing, so it's idempotent and never
+    // overwrites an admin-set count. Out-of-stock products start at 0. This is
+    // deliberately fatal on failure (outer catch exits): without it every
+    // checkout would see "not enough stock", so a broken shop must not start.
+    const out = await Bouquet.updateMany({ stock: { $exists: false }, inStock: false }, { $set: { stock: 0 } });
+    const rest = await Bouquet.updateMany({ stock: { $exists: false } }, { $set: { stock: 10 } });
+    const backfilled = (out.modifiedCount || 0) + (rest.modifiedCount || 0);
+    if (backfilled > 0) console.log(`Stock backfilled for ${backfilled} product(s)`);
+
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on http://0.0.0.0:${PORT}`);
       console.log(`Local:   http://localhost:${PORT}`);
