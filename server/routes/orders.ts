@@ -6,6 +6,7 @@ import User from '../models/User';
 import { errorResponse } from '../utils/httpError';
 import { authenticate } from '../middleware/auth';
 import { parsePage, envelope } from '../utils/pagination';
+import { LOW_STOCK_THRESHOLD, maybeAlertLowStock } from '../utils/lowStock';
 
 // Mirrors the status enum on the Order schema (kept as a literal union so
 // assignments to `order.status` typecheck after runtime validation).
@@ -130,6 +131,9 @@ router.post('/', authenticate, async (req: any, res) => {
       }
     };
     const reserved: Reserved[] = [];
+    // Phase 5: remember threshold crossings so the admin bell can be alerted
+    // once — and only once — this order is actually committed.
+    const lowStockCrossings: Array<{ id: any; name: string; prev: number; next: number }> = [];
     for (const item of populatedItems) {
       const updated = await Bouquet.findOneAndUpdate(
         { _id: item.bouquet, inStock: true, stock: { $gte: item.quantity } },
@@ -144,6 +148,13 @@ router.post('/', authenticate, async (req: any, res) => {
         });
       }
       reserved.push({ id: item.bouquet, qty: item.quantity });
+      // `updated` is the pre-decrement document — the exact crossing maths.
+      const prev = updated.stock;
+      const next = prev - item.quantity;
+      if (prev > LOW_STOCK_THRESHOLD && next <= LOW_STOCK_THRESHOLD) {
+        const doc = await Bouquet.findById(item.bouquet).select('name');
+        lowStockCrossings.push({ id: item.bouquet, name: doc?.name || 'A bouquet', prev, next });
+      }
     }
 
     const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
@@ -200,6 +211,12 @@ router.post('/', authenticate, async (req: any, res) => {
         '/admin/orders'
       )
     ));
+
+    // Inventory monitoring: alert only after the order is committed (a failed
+    // save above restocks instead, so those units never really left).
+    for (const c of lowStockCrossings) {
+      await maybeAlertLowStock(c.id, c.name, c.prev, c.next, `order ${orderId}`);
+    }
 
     res.status(201).json(populated);
   } catch (err: any) {
@@ -279,6 +296,8 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
     // this order currently holds; leaving 'cancelled' takes them again — but
     // only if this order ever reserved any (pre-stock-tracking orders never
     // took units, so cancelling them must not mint phantom stock).
+    // Phase 5: reactivations can also cross the low-stock threshold.
+    const reactivatedCrossings: Array<{ id: any; name: string; prev: number; next: number }> = [];
     if (status === 'cancelled' && previousStatus !== 'cancelled' && order.stockReserved) {
       try {
         for (const item of order.items) {
@@ -301,6 +320,12 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
         );
         if (!ok) { blockedItem = { id, qty }; break; }
         taken.push({ id, qty });
+        const prev = ok.stock;
+        const next = prev - qty;
+        if (prev > LOW_STOCK_THRESHOLD && next <= LOW_STOCK_THRESHOLD) {
+          const doc = await Bouquet.findById(id).select('name');
+          reactivatedCrossings.push({ id, name: doc?.name || 'A bouquet', prev, next });
+        }
       }
       if (blockedItem) {
         for (const t of taken) {
@@ -331,6 +356,11 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
       }
     }
     await order.save();
+
+    // Inventory monitoring — same crossing rule as checkout, after commit.
+    for (const c of reactivatedCrossings) {
+      await maybeAlertLowStock(c.id, c.name, c.prev, c.next, `order ${order._id} reactivation`);
+    }
 
     // Tell the customer how their order is moving — only on real changes,
     // and only for transitions they didn't trigger themselves (rating).

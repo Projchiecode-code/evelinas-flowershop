@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Search, Package, X, Check, Loader2, WifiOff } from 'lucide-react';
+import { useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
@@ -7,6 +8,7 @@ import { toast } from 'sonner';
 import { useProducts } from '../../contexts/ProductsContext';
 import { Bouquet } from '../../types';
 import { formatCurrency } from '../../utils/currency';
+import { classifyStock, unitsLeft, LOW_STOCK_THRESHOLD } from '../../utils/inventory';
 
 const EMPTY: Omit<Bouquet, 'id'> = {
   name: '', description: '', price: 0, image: '', category: 'Roses',
@@ -23,11 +25,34 @@ export function ProductManagement() {
   const [form, setForm] = useState<Omit<Bouquet, 'id'>>(EMPTY);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Phase 5: quick inventory filters ("Low stock (2)") above the table.
+  const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out'>('all');
 
-  const filtered = bouquets.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.category.toLowerCase().includes(search.toLowerCase())
+  // Phase 5: deep link from the dashboard Inventory Watch / bell alerts —
+  // /admin/products?edit=<id> opens that product's edit form (one-shot).
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (!editId || isLoading) return;
+    const target = bouquets.find(b => b.id === editId);
+    if (target) startEdit(target);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, bouquets, isLoading]);
+
+  const stockCounts = bouquets.reduce(
+    (acc, b) => { acc[classifyStock(b)] += 1; return acc; },
+    { out: 0, low: 0, ok: 0 } as Record<'out' | 'low' | 'ok', number>,
   );
+
+  const filtered = bouquets.filter(p => {
+    const status = classifyStock(p);
+    if (stockFilter === 'low' && status !== 'low') return false;
+    if (stockFilter === 'out' && status !== 'out') return false;
+    return (
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.category.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   const startAdd = () => { setAdding(true); setEditing(null); setForm(EMPTY); };
   const startEdit = (p: Bouquet) => {
@@ -155,20 +180,44 @@ export function ProductManagement() {
               <Input value={form.occasion.join(', ')} onChange={e => setForm(f => ({ ...f, occasion: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))} placeholder="Birthday, Anniversary" className="border-pink-200" />
             </div>
           </div>
-          <div className="flex items-center gap-4 mt-5">
+          {/* Footer — wraps to two rows on phones so Save Changes never overflows the card */}
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-5">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.inStock} onChange={e => setForm(f => ({ ...f, inStock: e.target.checked }))} className="accent-rose-500 w-4 h-4" />
               <span className="text-sm text-gray-700">In Stock</span>
             </label>
-            <div className="flex-1" />
-            <Button variant="outline" onClick={cancelForm} className="border-gray-200" disabled={saving}>Cancel</Button>
-            <Button onClick={saveProduct} disabled={saving} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
-              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
-              {saving ? 'Saving…' : adding ? 'Add Product' : 'Save Changes'}
-            </Button>
+            <div className="hidden sm:block flex-1" />
+            <div className="flex items-center gap-3 sm:gap-4 ml-auto">
+              <Button variant="outline" onClick={cancelForm} className="border-gray-200" disabled={saving}>Cancel</Button>
+              <Button onClick={saveProduct} disabled={saving} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                {saving ? 'Saving…' : adding ? 'Add Product' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Phase 5 — inventory filter chips */}
+      <div className="flex flex-wrap gap-2">
+        {([
+          { key: 'all', label: 'All products', count: bouquets.length, tone: '' },
+          { key: 'low', label: `Low stock (≤${LOW_STOCK_THRESHOLD})`, count: stockCounts.low, tone: stockCounts.low > 0 ? 'text-amber-600' : 'text-gray-400' },
+          { key: 'out', label: 'Out of stock', count: stockCounts.out, tone: stockCounts.out > 0 ? 'text-red-500' : 'text-gray-400' },
+        ] as const).map(chip => (
+          <button
+            key={chip.key}
+            onClick={() => setStockFilter(chip.key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+              stockFilter === chip.key
+                ? 'bg-gradient-to-r from-rose-500 to-purple-500 text-white border-transparent shadow-sm'
+                : 'bg-white text-gray-600 border-pink-200 hover:border-rose-300'
+            }`}
+          >
+            {chip.label} <span className={stockFilter === chip.key ? '' : chip.tone}>({chip.count})</span>
+          </button>
+        ))}
+      </div>
 
       {/* Search */}
       <div className="relative">
@@ -198,6 +247,10 @@ export function ProductManagement() {
                       <div>
                         <p className="font-semibold text-gray-800">{p.name}</p>
                         <p className="text-xs text-gray-400 line-clamp-1 hidden sm:block">{p.flowers.slice(0, 2).join(', ')}</p>
+                        {/* Stock stays visible on phones — its table column is hidden below md. */}
+                        <p className={`text-xs mt-0.5 md:hidden font-medium ${classifyStock(p) === 'out' ? 'text-rose-500' : classifyStock(p) === 'low' ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>
+                          {classifyStock(p) === 'out' ? 'Out of stock' : unitsLeft(p.stock)}
+                        </p>
                       </div>
                     </div>
                   </td>

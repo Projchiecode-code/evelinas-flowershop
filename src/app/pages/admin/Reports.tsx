@@ -1,10 +1,13 @@
 import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { TrendingUp, Banknote, ShoppingBag, Star, Users, Award, Package, Calendar, ChevronDown } from 'lucide-react';
+import { Link } from 'react-router';
 import { useOrders } from '../../contexts/OrderContext';
 import { useReviews } from '../../contexts/ReviewsContext';
+import { useProducts } from '../../contexts/ProductsContext';
 import { Order } from '../../types';
 import { Input } from '../../components/ui/input';
+import { classifyStock, LOW_STOCK_THRESHOLD } from '../../utils/inventory';
 
 const PIE_COLORS = ['#f43f5e', '#a855f7', '#ec4899', '#fb7185', '#c084fc', '#f472b6'];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -495,6 +498,76 @@ export function Reports() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Phase 5 — inventory monitoring */}
+      <InventoryReport />
+    </div>
+  );
+}
+
+/**
+ * Phase 5 — Inventory report.
+ * Current stock across the whole catalog, worst first — deliberately not
+ * filtered by the date range above (stock is point-in-time, not windowed).
+ * Product names deep-link to the edit form (?edit=).
+ */
+function InventoryReport() {
+  const { bouquets } = useProducts();
+  if (bouquets.length === 0) return null;
+  const rows = [...bouquets].sort((a, b) => a.stock - b.stock || a.name.localeCompare(b.name));
+  const outCount = rows.filter(b => classifyStock(b) === 'out').length;
+  const lowCount = rows.filter(b => classifyStock(b) === 'low').length;
+
+  return (
+    <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+        <h2 className="font-bold text-gray-800 flex items-center gap-2">
+          <Package className="w-4 h-4 text-rose-500" /> Inventory Status
+        </h2>
+        <div className="flex flex-wrap gap-2 text-xs font-medium">
+          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{rows.length} products</span>
+          <span className={`px-2 py-0.5 rounded-full ${lowCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>{lowCount} low stock</span>
+          <span className={`px-2 py-0.5 rounded-full ${outCount > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>{outCount} out of stock</span>
+        </div>
+      </div>
+      <p className="text-xs text-gray-400 mb-4">
+        Current stock levels — not affected by the date range above. Threshold: at or below {LOW_STOCK_THRESHOLD} units is low. Sorted lowest first.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-rose-100">
+              <th className="text-left py-2 text-gray-500 font-medium">Product</th>
+              <th className="text-left py-2 text-gray-500 font-medium hidden sm:table-cell">Category</th>
+              <th className="text-right py-2 text-gray-500 font-medium">Units</th>
+              <th className="text-right py-2 text-gray-500 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(b => {
+              const status = classifyStock(b);
+              return (
+                <tr key={b.id} className="border-b border-rose-50 hover:bg-rose-50/50 transition-colors">
+                  <td className="py-2.5 pr-3">
+                    <Link to={`/admin/products?edit=${b.id}`} className="font-medium text-gray-800 hover:text-rose-600 hover:underline">
+                      {b.name}
+                    </Link>
+                  </td>
+                  <td className="py-2.5 hidden sm:table-cell text-gray-500">{b.category}</td>
+                  <td className={`py-2.5 text-right font-bold ${status === 'out' ? 'text-red-500' : status === 'low' ? 'text-amber-600' : 'text-gray-700'}`}>
+                    {b.stock}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${status === 'out' ? 'bg-red-50 text-red-600' : status === 'low' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
+                      {status === 'out' ? 'Out of stock' : status === 'low' ? 'Low stock' : 'In stock'}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

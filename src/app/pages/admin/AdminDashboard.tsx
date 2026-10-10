@@ -1,8 +1,11 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, ShoppingBag, Package, Star, Banknote, Users } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, Star, Banknote, Users, AlertTriangle, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Link } from 'react-router';
 import { useOrders } from '../../contexts/OrderContext';
 import { useProducts } from '../../contexts/ProductsContext';
 import { formatCurrency } from '../../utils/currency';
+import { Bouquet } from '../../types';
+import { classifyStock, unitsLeft, LOW_STOCK_THRESHOLD } from '../../utils/inventory';
 
 const PIE_COLORS = ['#f43f5e', '#a855f7', '#ec4899', '#fb7185', '#c084fc'];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -17,6 +20,72 @@ const pctChange = (current: number, previous: number) => {
   const delta = ((current - previous) / previous) * 100;
   return `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`;
 };
+
+/**
+ * Phase 5 — Inventory Watch.
+ * Live stock monitor: every product at/below the shared threshold (worst
+ * first), each row deep-linking straight to its edit form (?edit=). A green
+ * all-clear line shows when the catalog is fully stocked, so the widget is
+ * worth glancing at even when nothing is wrong.
+ */
+function InventoryWatch({ bouquets }: { bouquets: Bouquet[] }) {
+  if (bouquets.length === 0) return null;
+  const statusOf = (b: Bouquet) => classifyStock(b);
+  const issues = bouquets
+    .filter(b => statusOf(b) !== 'ok')
+    .sort((a, b) => a.stock - b.stock || a.name.localeCompare(b.name));
+  const outCount = issues.filter(b => statusOf(b) === 'out').length;
+  const lowCount = issues.length - outCount;
+
+  return (
+    <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="font-bold text-gray-800 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-500" /> Inventory Watch
+        </h2>
+        <div className="flex flex-wrap gap-2 text-xs font-medium">
+          <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600">{outCount} out of stock</span>
+          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">{lowCount} low (≤{LOW_STOCK_THRESHOLD})</span>
+          <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-700">{bouquets.length - issues.length} healthy</span>
+        </div>
+      </div>
+
+      {issues.length === 0 ? (
+        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          All {bouquets.length} products are stocked above the {LOW_STOCK_THRESHOLD}-unit threshold.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {issues.map(b => {
+            const isOut = statusOf(b) === 'out';
+            return (
+              <Link
+                key={b.id}
+                to={`/admin/products?edit=${b.id}`}
+                className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-3 text-sm transition-colors ${isOut ? 'border-red-100 bg-red-50/60 hover:bg-red-50' : 'border-amber-100 bg-amber-50/60 hover:bg-amber-50'}`}
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${isOut ? 'bg-red-500' : 'bg-amber-500'}`} />
+                <span className="font-semibold text-gray-800 min-w-0 truncate">{b.name}</span>
+                <span className={`text-xs font-bold ${isOut ? 'text-red-600' : 'text-amber-700'}`}>
+                  {isOut ? (b.stock <= 0 ? '0 units left' : 'Unavailable') : unitsLeft(b.stock)}
+                </span>
+                <span className="ml-auto flex items-center gap-1 text-xs font-medium text-gray-500">
+                  {isOut ? 'Restock now' : 'Restock'} <ChevronRight className="w-3.5 h-3.5" />
+                </span>
+              </Link>
+            );
+          })}
+          <div className="pt-1 text-right">
+            <Link to="/admin/products" className="text-xs font-medium text-rose-600 hover:underline">
+              Manage all inventory →
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AdminDashboard() {
   const { orders } = useOrders();
@@ -113,6 +182,9 @@ export function AdminDashboard() {
           </div>
         ))}
       </div>
+
+      {/* Phase 5 — inventory monitoring */}
+      <InventoryWatch bouquets={bouquets} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue Chart */}
