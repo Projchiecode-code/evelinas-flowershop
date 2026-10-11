@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { Sparkles, Truck, Shield, Star, ArrowRight, Flower2, Camera, Quote } from 'lucide-react';
+import { Sparkles, Truck, Shield, Star, ArrowRight, Flower2, Camera, Quote, Leaf, Palette, BadgeCheck } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { BouquetCard } from '../components/BouquetCard';
@@ -7,13 +7,15 @@ import { useProducts } from '../contexts/ProductsContext';
 import { useGallery } from '../contexts/GalleryContext';
 import { useReviews } from '../contexts/ReviewsContext';
 
+// Category tiles use real flower photos (public/categories/*.jpg — sourced
+// from Unsplash) instead of emoji icons. Swap any file to restyle a tile.
 const CATEGORIES = [
-  { name: 'Roses', icon: '🌹', color: 'from-rose-400 to-pink-500', link: '/catalog?category=Roses' },
-  { name: 'Tulips', icon: '🌷', color: 'from-purple-400 to-violet-500', link: '/catalog?category=Tulips' },
-  { name: 'Sunflowers', icon: '🌻', color: 'from-amber-400 to-orange-400', link: '/catalog?category=Sunflowers' },
-  { name: 'Orchids', icon: '🪷', color: 'from-fuchsia-400 to-pink-600', link: '/catalog?category=Orchids' },
-  { name: 'Mixed', icon: '💐', color: 'from-pink-400 to-rose-500', link: '/catalog?category=Mixed' },
-  { name: 'Lilies', icon: '🌸', color: 'from-violet-400 to-purple-600', link: '/catalog?category=Lilies' },
+  { name: 'Roses', photo: '/categories/roses.jpg', link: '/catalog?category=Roses' },
+  { name: 'Tulips', photo: '/categories/tulips.jpg', link: '/catalog?category=Tulips' },
+  { name: 'Sunflowers', photo: '/categories/sunflowers.jpg', link: '/catalog?category=Sunflowers' },
+  { name: 'Orchids', photo: '/categories/orchids.jpg', link: '/catalog?category=Orchids' },
+  { name: 'Mixed', photo: '/categories/mixed.jpg', link: '/catalog?category=Mixed' },
+  { name: 'Lilies', photo: '/categories/lilies.jpg', link: '/catalog?category=Lilies' },
 ];
 
 const OCCASIONS = [
@@ -37,10 +39,11 @@ export function Home() {
     <div className="min-h-screen bg-white">
       {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-rose-500 via-pink-500 to-purple-600 text-white">
-        <div className="absolute inset-0 opacity-10 pointer-events-none select-none">
-          <div className="absolute top-10 left-10 text-9xl">🌹</div>
-          <div className="absolute top-20 right-20 text-8xl">🌸</div>
-          <div className="absolute bottom-10 left-1/3 text-7xl">💐</div>
+        {/* Soft light blooms instead of emoji decorations */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none select-none" aria-hidden="true">
+          <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute top-10 -right-32 w-[28rem] h-[28rem] rounded-full bg-yellow-300/10 blur-3xl" />
+          <div className="absolute -bottom-32 left-1/4 w-96 h-96 rounded-full bg-purple-300/10 blur-3xl" />
         </div>
         <div className="relative container mx-auto px-4 py-24 text-center">
           <Badge className="mb-4 bg-white/20 text-white border-white/30 hover:bg-white/20">
@@ -82,10 +85,19 @@ export function Home() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             {CATEGORIES.map(cat => (
-              <Link key={cat.name} to={cat.link}>
-                <div className={`bg-gradient-to-br ${cat.color} rounded-2xl p-6 text-center text-white hover:scale-105 transition-transform cursor-pointer shadow-md`}>
-                  <div className="text-4xl mb-2">{cat.icon}</div>
-                  <p className="font-semibold">{cat.name}</p>
+              <Link key={cat.name} to={cat.link} className="group">
+                <div className="relative aspect-square rounded-3xl overflow-hidden bg-white ring-1 ring-pink-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                  <img
+                    src={cat.photo}
+                    alt={`${cat.name} bouquet`}
+                    loading="lazy"
+                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 p-2.5">
+                    <span className="mx-auto block w-fit bg-white/95 backdrop-blur px-3 py-1 rounded-full text-sm font-semibold text-gray-800 shadow-sm group-hover:text-rose-600 transition-colors">
+                      {cat.name}
+                    </span>
+                  </div>
                 </div>
               </Link>
             ))}
@@ -221,13 +233,15 @@ export function Home() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 text-center">
             {[
-              { icon: '🌿', title: 'Farm Fresh', desc: 'Sourced directly from local farms for maximum freshness' },
-              { icon: '🎨', title: 'Expert Design', desc: 'Crafted by experienced florists with an eye for beauty' },
-              { icon: '⚡', title: 'Fast Delivery', desc: 'Same-day delivery available for orders placed before 2 PM' },
-              { icon: '💯', title: 'Satisfaction Guaranteed', desc: "Not happy? We'll replace or refund, no questions asked" },
+              { icon: Leaf, title: 'Farm Fresh', desc: 'Sourced directly from local farms for maximum freshness' },
+              { icon: Palette, title: 'Expert Design', desc: 'Crafted by experienced florists with an eye for beauty' },
+              { icon: Truck, title: 'Fast Delivery', desc: 'Same-day delivery available for orders placed before 2 PM' },
+              { icon: BadgeCheck, title: 'Satisfaction Guaranteed', desc: "Not happy? We'll replace or refund, no questions asked" },
             ].map(item => (
               <div key={item.title} className="p-6 rounded-2xl bg-rose-50 hover:bg-rose-100 transition-colors">
-                <div className="text-4xl mb-3">{item.icon}</div>
+                <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-white shadow-sm flex items-center justify-center">
+                  <item.icon className="w-6 h-6 text-rose-500" />
+                </div>
                 <h3 className="font-bold text-gray-800 mb-2">{item.title}</h3>
                 <p className="text-sm text-gray-600">{item.desc}</p>
               </div>
