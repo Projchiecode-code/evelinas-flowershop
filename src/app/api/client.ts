@@ -1,5 +1,14 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const TOKEN_STORAGE_KEY = 'evelinas_token';
+
+/** The JWT the SPA holds after login — also used to authenticate the SSE feed. */
+export const getAuthToken = (): string | null => {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
 
 class ApiClient {
   // iOS Safari can refuse the cross-site session cookie (ITP blocks it while
@@ -115,6 +124,11 @@ export const orderApi = {
     api.patch(`/orders/${id}/status`, { status, ...data }),
   rate: (id: string, rating: number, comment: string) =>
     api.patch(`/orders/${id}/rate`, { rating, comment }),
+};
+
+// AI personalization — collaborative-filtering stats from real orders
+export const recommendationApi = {
+  getCoOrders: () => api.get('/recommendations/co-orders'),
 };
 
 // Reviews

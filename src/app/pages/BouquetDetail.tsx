@@ -16,7 +16,8 @@ import { useReviews } from '../contexts/ReviewsContext';
 import { useGallery } from '../contexts/GalleryContext';
 import { formatCurrency } from '../utils/currency';
 import { useAuth } from '../contexts/AuthContext';
-import { AIRecommendationEngine, buildSignals } from '../utils/aiRecommendations';
+import { AIRecommendationEngine, buildSignals, CoOrderMap } from '../utils/aiRecommendations';
+import { fetchCoOrders } from '../utils/coOrders';
 import { recordView, getRecentViews } from '../utils/viewHistory';
 import { toast } from 'sonner';
 import { compressImage } from '../utils/imageCompress';
@@ -50,6 +51,16 @@ export function BouquetDetail() {
   useEffect(() => {
     if (bouquet) recordView(bouquet.id);
   }, [bouquet]);
+
+  // Learned "customers who ordered X also ordered Y" pairs from the shop's
+  // real order history — the "often ordered together" signal below. Fails
+  // soft: no API, no collaborative signal, the rest of the page unaffected.
+  const [coOrders, setCoOrders] = useState<CoOrderMap>({});
+  useEffect(() => {
+    let alive = true;
+    fetchCoOrders().then(map => { if (alive) setCoOrders(map); });
+    return () => { alive = false; };
+  }, []);
 
   const [quantity, setQuantity] = useState(1);
   const [customMessage, setCustomMessage] = useState('');
@@ -91,6 +102,7 @@ export function BouquetDetail() {
     viewedIds: getRecentViews(),
     orders,
     favoriteCategories: favorites.map(f => f.category),
+    coOrders,
   });
   const similarBouquets = AIRecommendationEngine.getSimilarBouquets(bouquet.id, 4, signals);
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;

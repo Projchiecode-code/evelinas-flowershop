@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AppNotification } from '../types';
 import { notificationApi } from '../api/client';
+import { subscribeRealtime } from '../utils/realtime';
 import { useAuth } from './AuthContext';
 
 interface NotificationsContextType {
@@ -54,7 +55,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   // /notifications requires a session cookie — skip it while signed out so
   // anonymous visits don't log a 401 on every page load. While signed in,
-  // poll so admin status changes show up without a page refresh.
+  // subscribe to the SSE push for instant updates and keep a poll as the
+  // fallback for dropped connections.
   useEffect(() => {
     if (isAuthLoading) return;
     if (!isAuthenticated) {
@@ -64,7 +66,20 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
     fetchNotifications();
     const timer = window.setInterval(fetchNotifications, 30000);
-    return () => window.clearInterval(timer);
+    const stopRealtime = subscribeRealtime({
+      onNotification: raw => {
+        setNotifications(prev => {
+          const id = raw?._id || raw?.id;
+          // The poll may have already delivered it — never double-count a bell.
+          if (id && prev.some(n => n.id === id)) return prev;
+          return [normalizeNotification(raw), ...prev];
+        });
+      },
+    });
+    return () => {
+      window.clearInterval(timer);
+      stopRealtime();
+    };
     // user?.id so switching accounts mid-session refetches too (login over an
     // existing session never flips isAuthenticated, which would keep the old
     // user's bell).

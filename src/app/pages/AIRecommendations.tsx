@@ -15,8 +15,10 @@ import { formatCurrency } from '../utils/currency';
 import {
   buildSignals,
   applySignals,
+  CoOrderMap,
   RecommendationSignals,
 } from '../utils/aiRecommendations';
+import { fetchCoOrders } from '../utils/coOrders';
 import { AiBudget, Bouquet, DEFAULT_AI_BUDGET } from '../types';
 
 interface Step {
@@ -180,6 +182,15 @@ export function AIRecommendations() {
   const [loadProgress, setLoadProgress] = useState(0);
   // Admin-editable budget brackets (Settings → AI Picks); defaults until loaded.
   const [budget, setBudget] = useState<AiBudget>(DEFAULT_AI_BUDGET);
+  // "Customers who ordered X also ordered Y" — learned from real order
+  // history, fetched once per session and fed into the scoring below.
+  const [coOrders, setCoOrders] = useState<CoOrderMap>({});
+
+  useEffect(() => {
+    let alive = true;
+    fetchCoOrders().then(map => { if (alive) setCoOrders(map); });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     settingsApi.getAiBudget()
@@ -228,12 +239,14 @@ export function AIRecommendations() {
 
       if (t >= 1) {
         window.clearInterval(timer);
-        // Live inputs at completion: ratings, view history, orders, favourites.
+        // Live inputs at completion: ratings, view history, orders,
+        // favourites, and the learned co-occurrence table.
         setResults(getRecommendations(answers, buildSignals({
           reviews: getApprovedReviews(),
           viewedIds: getRecentViews(),
           orders,
           favoriteCategories: favorites.map(f => f.category),
+          coOrders,
         }), budget));
         setLoading(false);
       }

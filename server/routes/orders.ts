@@ -8,6 +8,7 @@ import { authenticate } from '../middleware/auth';
 import { parsePage, envelope } from '../utils/pagination';
 import { LOW_STOCK_THRESHOLD, maybeAlertLowStock } from '../utils/lowStock';
 import { validateStudioCustomization } from '../data/studioPricing';
+import * as sse from '../utils/sse';
 
 // Mirrors the status enum on the Order schema (kept as a literal union so
 // assignments to `order.status` typecheck after runtime validation).
@@ -40,7 +41,10 @@ const router = Router();
  */
 async function notify(userId: string | null, title: string, message: string, link = '') {
   try {
-    await Notification.create({ user: userId, title, message, type: 'order', link });
+    const doc = await Notification.create({ user: userId, title, message, type: 'order', link });
+    // Real-time push: the bell updates the instant the row is written, without
+    // waiting for the client's poll. Broadcasts (user: null) reach everyone.
+    sse.emit('notification:new', doc, userId ? { userId } : undefined);
   } catch (err) {
     console.error('Failed to create notification:', err);
   }
@@ -248,6 +252,14 @@ router.post('/', authenticate, async (req: any, res) => {
         '/admin/orders'
       )
     ));
+    // Live dashboards: an open admin panel shows the order the moment it lands.
+    sse.emit('order:new', {
+      orderId,
+      customerName,
+      total: Number(total),
+      status: order.status,
+      at: new Date().toISOString(),
+    }, { admin: true });
 
     // Inventory monitoring: alert only after the order is committed (a failed
     // save above restocks instead, so those units never really left).
@@ -395,6 +407,16 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
       }
     }
     await order.save();
+
+    // Real-time push: the customer's tracking page and every open admin
+    // dashboard flip to the new status immediately — the 30 s poll is now
+    // only a fallback for dropped connections.
+    sse.emit('order:status', {
+      orderId: String(order._id),
+      status,
+      previousStatus,
+      at: new Date().toISOString(),
+    }, { userId: order.customer ? String(order.customer) : null, admin: true });
 
     // Inventory monitoring — same crossing rule as checkout, after commit.
     for (const c of reactivatedCrossings) {

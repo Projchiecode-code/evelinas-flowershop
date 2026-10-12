@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Notification from '../models/Notification';
 import { errorResponse } from '../utils/httpError';
 import { authenticate } from '../middleware/auth';
+import * as sse from '../utils/sse';
 import { parsePage, envelope } from '../utils/pagination';
 
 const router = Router();
@@ -31,6 +32,9 @@ router.post('/', authenticate, async (req: any, res) => {
       user: broadcast && req.userRole === 'admin' ? null : req.userId,
     });
     await notification.save();
+    // Real-time push: an open bell updates instantly (broadcasts reach
+    // every connected shopper the same way the DB row reaches every bell).
+    sse.emit('notification:new', notification, notification.user ? { userId: String(notification.user) } : undefined);
     res.status(201).json(notification);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

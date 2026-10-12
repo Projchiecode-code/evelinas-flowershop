@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { Order, OrderStatus, OrderPayload } from '../types';
 import { orderApi } from '../api/client';
 import { flowerPhoto } from '../data/studio';
+import { subscribeRealtime } from '../utils/realtime';
 import { useAuth } from './AuthContext';
 
 interface OrderContextType {
@@ -85,7 +86,10 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Only hit /orders for signed-in users — the endpoint is authenticated, so
-  // anonymous visits used to log a 401 for every page load.
+  // anonymous visits used to log a 401 for every page load. While signed in,
+  // also listen to the SSE feed: a pushed status change (or a new order, for
+  // the admin dashboard) refreshes the list immediately — real-time tracking
+  // with the initial fetch as fallback. Bursts coalesce into one refresh.
   useEffect(() => {
     if (isAuthLoading) return;
     if (!isAuthenticated) {
@@ -94,6 +98,19 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       return;
     }
     fetchOrders();
+    let refreshTimer: number | undefined;
+    const scheduleRefresh = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(fetchOrders, 400);
+    };
+    const stopRealtime = subscribeRealtime({
+      onOrderStatus: scheduleRefresh,
+      onOrderNew: scheduleRefresh,
+    });
+    return () => {
+      window.clearTimeout(refreshTimer);
+      stopRealtime();
+    };
   }, [isAuthLoading, isAuthenticated, fetchOrders]);
 
   const createOrder = async (orderData: OrderPayload) => {

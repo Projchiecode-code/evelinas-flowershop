@@ -1,4 +1,5 @@
 import Notification from '../models/Notification';
+import * as sse from './sse';
 import User from '../models/User';
 
 /**
@@ -46,7 +47,8 @@ export async function maybeAlertLowStock(
     await Promise.all(admins.map(async admin => {
       const existing = await Notification.exists({ user: admin._id, link, read: false });
       if (existing) return;
-      await Notification.create({ user: admin._id, title, message, type: 'system', link });
+      const doc = await Notification.create({ user: admin._id, title, message, type: 'system', link });
+      sse.emit('notification:new', doc, { userId: String(admin._id) });
     }));
   } catch (err) {
     console.error('Low-stock alert failed:', err);

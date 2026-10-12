@@ -18,6 +18,22 @@ export interface BouquetRating {
 }
 
 /**
+ * One "customers who ordered X also ordered Y" partner, as learned from the
+ * order history (counts come from real orders — not hand-tuned rules).
+ */
+export interface CoOrderPair {
+  /** catalogue id of the partner bouquet */
+  id: string;
+  /** distinct orders containing both */
+  together: number;
+  /** distinct customers who bought both */
+  customers: number;
+}
+
+/** catalogue id -> its top co-ordered partners, ranked by customer count. */
+export type CoOrderMap = Record<string, CoOrderPair[]>;
+
+/**
  * Real-world inputs that replace guessing from the static mock fields:
  * actual star ratings, actual page views, and the shopper's actual orders.
  */
@@ -32,6 +48,8 @@ export interface RecommendationSignals {
   purchasedCategories: string[];
   /** categories the shopper has favourited */
   favoriteCategories: string[];
+  /** "customers who ordered X also ordered Y" table from real orders */
+  coOrders?: CoOrderMap;
 }
 
 const EMPTY_SIGNALS: RecommendationSignals = {
@@ -52,6 +70,7 @@ export function buildSignals(input: {
   viewedIds?: string[];
   orders?: Order[];
   favoriteCategories?: string[];
+  coOrders?: CoOrderMap;
 }): RecommendationSignals {
   // Real star ratings, averaged per bouquet.
   const ratings: Record<string, BouquetRating> = {};
@@ -66,13 +85,20 @@ export function buildSignals(input: {
   }
 
   // What this shopper has actually bought — cancelled orders don't count.
+  // Orders store the shop's MongoDB product ids while the storefront
+  // catalogue uses local ids ("1".."8"), so resolve each item to its
+  // catalogue twin by name first (the same bridge checkout uses in reverse).
+  // Without it, purchased signals silently never matched the catalogue.
+  const catalogIdByName = new Map(getCatalog().map(b => [b.name.trim().toLowerCase(), b.id]));
   const purchased: string[] = [];
   const purchasedCategories = new Set<string>();
   for (const order of input.orders ?? []) {
     if (order.status === 'cancelled') continue;
     for (const item of order.items ?? []) {
-      const id = item.bouquet?.id;
-      if (!id || purchased.includes(id)) continue;
+      const rawId = item.bouquet?.id;
+      if (!rawId) continue;
+      const id = catalogIdByName.get((item.bouquet?.name || '').trim().toLowerCase()) || rawId;
+      if (purchased.includes(id)) continue;
       purchased.push(id);
       const inCatalog = getCatalog().find(b => b.id === id);
       if (inCatalog) purchasedCategories.add(inCatalog.category);
@@ -85,6 +111,7 @@ export function buildSignals(input: {
     purchased,
     purchasedCategories: [...purchasedCategories],
     favoriteCategories: input.favoriteCategories ?? [],
+    coOrders: input.coOrders,
   };
 }
 
@@ -135,10 +162,29 @@ export function applySignals(
   const favoriteMatch = signals.favoriteCategories.includes(bouquet.category);
   if (favoriteMatch) bonus += 8;
 
+  // Collaborative filtering: pair this bouquet with what the shopper has
+  // actually bought or browsed — "customers who ordered X also ordered this".
+  // The pair counts are learned from the shop's real order history, so this
+  // signal comes from customer behaviour, not from hand-set rules.
+  const coAffinity = (signals.coOrders?.[bouquet.id] ?? []).find(
+    p => signals.purchased.includes(p.id) || signals.viewed.includes(p.id),
+  );
+  if (coAffinity) {
+    bonus += Math.min(15, 5 + coAffinity.customers * 2);
+  }
+
   // Reasons are capped at two, so list them by importance — "you already own
   // this" must never be the one that gets truncated away.
   const reasons: string[] = [];
   if (alreadyOrdered) reasons.push('You ordered this before');
+  if (coAffinity) {
+    const partner = getCatalog().find(b => b.id === coAffinity.id);
+    reasons.push(
+      coAffinity.customers > 1
+        ? `${coAffinity.customers} customers who ordered ${partner?.name || 'your picks'} also ordered this`
+        : `Also ordered with ${partner?.name || 'your picks'}`,
+    );
+  }
   if (rating && rating.count > 0) {
     reasons.push(`Rated ${rating.avg.toFixed(1)}★ by ${rating.count} customer${rating.count === 1 ? '' : 's'}`);
   }
@@ -293,6 +339,21 @@ export class AIRecommendationEngine {
       .map(b => {
         let score = 0;
         const reasons: RecommendationReason[] = [];
+
+        // Learned from real orders: customers who bought this also bought b.
+        // The strongest signal on the card — it comes from what people
+        // actually purchased together, not from attribute matching.
+        const coPartner = signals?.coOrders?.[bouquetId]?.find(p => p.id === b.id);
+        if (coPartner && coPartner.customers > 0) {
+          score += Math.min(45, 20 + coPartner.customers * 5);
+          reasons.push({
+            type: 'popular',
+            message:
+              coPartner.customers > 1
+                ? `${coPartner.customers} customers ordered both`
+                : 'Often ordered together',
+          });
+        }
 
         // Same category
         if (b.category === bouquet.category) {
