@@ -275,6 +275,9 @@ Client-side build variable (separate SPA build): `VITE_API_URL` (defaults to
 
 ## 8. Running the Backend
 
+Full step-by-step guide for running the whole shop locally (frontend +
+backend + `.env`): see [SETUP.md](SETUP.md).
+
 ```bash
 npm install
 
