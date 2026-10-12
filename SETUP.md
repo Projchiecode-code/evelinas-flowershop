@@ -49,6 +49,9 @@ It already contains the correct localhost values:
 > stop and check — it should always stay ignored.
 
 ## 4. Run it
+make sure you are running in the project root folder
+like this: 
+C:\Users\Admin\Downloads\project\evelinas-flowershop>
 
 Two terminals from the project root:
 
