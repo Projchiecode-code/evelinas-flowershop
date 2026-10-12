@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ChevronDown, ChevronUp, Package, CreditCard, Truck, Star, CheckCircle, XCircle, ImageIcon, Eye, ArrowRight, AlertCircle } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Package, CreditCard, Truck, Star, CheckCircle, XCircle, ImageIcon, Eye, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useOrders } from '../../contexts/OrderContext';
 import { Order, OrderStatus } from '../../types';
 import { formatCurrency } from '../../utils/currency';
+import { BouquetPreview } from '../../components/BouquetPreview';
+import { flowerSummary, getBloomLook, getRibbon, getRibbonStyle, getSize, getWrap, getWrapStyle } from '../../data/studio';
 
 const STATUS_OPTIONS: { value: OrderStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All Orders' },
@@ -84,6 +86,8 @@ function ProofModal({ src, order, onClose }: { src: string; order?: Order; onClo
 function OrderRow({ order }: { order: Order }) {
   const [expanded, setExpanded] = useState(false);
   const [showProof, setShowProof] = useState(false);
+  // Custom Design Studio item currently enlarged in the design modal.
+  const [designItem, setDesignItem] = useState<Order['items'][number] | null>(null);
   const [confirmAdvance, setConfirmAdvance] = useState<OrderStatus | null>(null);
   const { updateOrderStatus } = useOrders();
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG['cancelled'];
@@ -100,6 +104,60 @@ function OrderRow({ order }: { order: Order }) {
           reparent out from under React. */}
       {showProof && order.paymentProof && createPortal(
         <ProofModal src={order.paymentProof} order={order} onClose={() => setShowProof(false)} />,
+        document.body
+      )}
+
+      {/* Enlarged Design Studio preview — the florist needs to see every stem,
+          the wrap and the ribbon clearly when handcrafting the bouquet. */}
+      {designItem?.customization && createPortal(
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          onClick={() => setDesignItem(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl max-h-[92vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-rose-500" />
+                {designItem.bouquet?.name || 'Custom Bouquet'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDesignItem(null)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none w-8 h-8 rounded-lg hover:bg-gray-100"
+                aria-label="Close design preview"
+              >
+                ×
+              </button>
+            </div>
+            <BouquetPreview
+              qtys={designItem.customization.flowers}
+              wrapId={designItem.customization.wrapColor}
+              ribbonId={designItem.customization.ribbonColor}
+              sizeId={designItem.customization.size}
+              wrapStyleId={designItem.customization.wrapStyle}
+              ribbonStyleId={designItem.customization.ribbonStyle}
+              lookId={designItem.customization.look}
+              uid={`adm-modal-${order.id}`}
+              className="w-full rounded-xl border border-pink-100"
+            />
+            <div className="mt-3 bg-rose-50/70 rounded-lg px-3 py-2 text-sm text-gray-600 space-y-0.5">
+              <p><span className="font-semibold text-gray-700">Flowers:</span> {flowerSummary(designItem.customization.flowers)}</p>
+              <p>
+                <span className="font-semibold text-gray-700">Wrap:</span> {getWrapStyle(designItem.customization.wrapStyle).name} · {getWrap(designItem.customization.wrapColor).name}
+                {'  '}
+                <span className="font-semibold text-gray-700">Ribbon:</span> {getRibbonStyle(designItem.customization.ribbonStyle).name} · {getRibbon(designItem.customization.ribbonColor).name}
+              </p>
+              <p>
+                <span className="font-semibold text-gray-700">Blooms:</span> {getBloomLook(designItem.customization.look).name}
+                {'  '}
+                <span className="font-semibold text-gray-700">Size:</span> {getSize(designItem.customization.size).name}
+              </p>
+            </div>
+          </div>
+        </div>,
         document.body
       )}
 
@@ -224,20 +282,73 @@ function OrderRow({ order }: { order: Order }) {
               <div className="mb-5">
                 <p className="text-xs text-gray-500 mb-2 font-semibold">Order Items</p>
                 <div className="space-y-2">
-                  {order.items.map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-pink-100">
-                      {item.bouquet?.image ? (
-                        <img src={item.bouquet.image} className="w-10 h-10 rounded-lg object-cover" alt="" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-pink-50 border border-dashed border-pink-200 flex items-center justify-center text-sm shrink-0">🌸</div>
-                      )}
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-800">{item.bouquet?.name || 'Product no longer available'}</p>
-                        <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
+                  {order.items.map((item, i) =>
+                    item.customization ? (
+                      /* Design Studio bouquet: show the exact spec the florist
+                         needs to handcraft it, plus a mini preview. */
+                      <div key={i} className="bg-white rounded-xl p-3 border border-pink-100">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); setDesignItem(item); }}
+                            title="Click to enlarge the design"
+                            aria-label="Enlarge custom bouquet design"
+                            className="relative shrink-0 rounded-lg cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-rose-400"
+                          >
+                            <BouquetPreview
+                              qtys={item.customization.flowers}
+                              wrapId={item.customization.wrapColor}
+                              ribbonId={item.customization.ribbonColor}
+                              sizeId={item.customization.size}
+                              wrapStyleId={item.customization.wrapStyle}
+                              ribbonStyleId={item.customization.ribbonStyle}
+                              lookId={item.customization.look}
+                              uid={`adm-${order.id}-${i}`}
+                              className="w-14 rounded-lg border border-pink-100 block"
+                            />
+                            <span className="absolute -top-1.5 -right-1.5 bg-white border border-pink-200 rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-sm pointer-events-none">🔍</span>
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                              <span className="truncate">{item.bouquet?.name || 'Custom Bouquet'}</span>
+                            </p>
+                            <p className="text-xs text-gray-400">Qty: {item.quantity} · Handcrafted to order</p>
+                            <p className="text-[11px] text-rose-400">🔍 Tap the preview to enlarge</p>
+                          </div>
+                          <p className="font-bold text-rose-600 text-sm shrink-0">
+                            {formatCurrency((item.bouquet?.price ?? item.price ?? 0) * item.quantity)}
+                          </p>
+                        </div>
+                        <div className="mt-2 bg-rose-50/70 rounded-lg px-3 py-2 text-xs text-gray-600 space-y-0.5">
+                          <p><span className="font-semibold text-gray-700">Flowers:</span> {flowerSummary(item.customization.flowers)}</p>
+                          <p>
+                            <span className="font-semibold text-gray-700">Wrap:</span> {getWrapStyle(item.customization.wrapStyle).name} · {getWrap(item.customization.wrapColor).name}
+                            {'  '}
+                            <span className="font-semibold text-gray-700">Ribbon:</span> {getRibbonStyle(item.customization.ribbonStyle).name} · {getRibbon(item.customization.ribbonColor).name}
+                          </p>
+                          <p>
+                            <span className="font-semibold text-gray-700">Blooms:</span> {getBloomLook(item.customization.look).name}
+                            {'  '}
+                            <span className="font-semibold text-gray-700">Size:</span> {getSize(item.customization.size).name}
+                          </p>
+                        </div>
                       </div>
-                      <p className="font-bold text-rose-600 text-sm">{formatCurrency((item.bouquet?.price ?? item.price ?? 0) * item.quantity)}</p>
-                    </div>
-                  ))}
+                    ) : (
+                      <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-pink-100">
+                        {item.bouquet?.image ? (
+                          <img src={item.bouquet.image} className="w-10 h-10 rounded-lg object-cover" alt="" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-pink-50 border border-dashed border-pink-200 flex items-center justify-center text-sm shrink-0">🌸</div>
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-gray-800">{item.bouquet?.name || 'Product no longer available'}</p>
+                          <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
+                        </div>
+                        <p className="font-bold text-rose-600 text-sm">{formatCurrency((item.bouquet?.price ?? item.price ?? 0) * item.quantity)}</p>
+                      </div>
+                    ),
+                  )}
                 </div>
               </div>
             )}

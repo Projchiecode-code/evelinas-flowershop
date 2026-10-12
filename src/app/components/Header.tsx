@@ -29,6 +29,7 @@ export function Header() {
   const NAV = [
     { to: '/', label: 'Home' },
     { to: '/catalog', label: 'Catalog' },
+    { to: '/design-studio', label: 'Design Studio' },
     { to: '/gallery', label: 'Gallery' },
     { to: '/recommendations', label: 'AI Picks ✨' },
     { to: '/track', label: 'Track Order' },
@@ -149,9 +150,9 @@ export function Header() {
           </div>
         </div>
 
-        {/* Desktop Nav */}
+        {/* Desktop Nav — flex-wrap so the 6th item never squeezes at md */}
         <nav className="hidden md:flex border-t border-rose-50">
-          <ul className="flex items-center gap-1 py-2">
+          <ul className="flex flex-wrap items-center gap-1 py-2">
             {NAV.map(n => (
               <li key={n.to}>
                 <Link

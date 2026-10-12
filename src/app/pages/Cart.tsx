@@ -1,10 +1,20 @@
 import { Link } from 'react-router';
-import { Trash2, Plus, Minus, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
 import { useCart } from '../contexts/CartContext';
 import { formatCurrency } from '../utils/currency';
+import { BouquetPreview } from '../components/BouquetPreview';
+import {
+  flowerSummary,
+  getBloomLook,
+  getRibbon,
+  getRibbonStyle,
+  getSize,
+  getWrap,
+  getWrapStyle,
+} from '../data/studio';
 
 /**
  * Units left for a cart line. Carts persist across sessions, so an item saved
@@ -63,12 +73,18 @@ export function Cart() {
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between gap-3 mb-2">
                         <div className="min-w-0">
-                          <Link
-                            to={`/bouquet/${item.bouquet.id}`}
-                            className="text-lg font-semibold hover:text-purple-600 transition-colors break-words"
-                          >
-                            {item.bouquet.name}
-                          </Link>
+                          {item.customization ? (
+                            // Custom designs have no catalog page — show the
+                            // name as plain text (the spec panel is below).
+                            <p className="text-lg font-semibold break-words">{item.bouquet.name}</p>
+                          ) : (
+                            <Link
+                              to={`/bouquet/${item.bouquet.id}`}
+                              className="text-lg font-semibold hover:text-purple-600 transition-colors break-words"
+                            >
+                              {item.bouquet.name}
+                            </Link>
+                          )}
                           <p className="text-sm text-gray-600 break-words">
                             {item.bouquet.category}
                           </p>
@@ -92,6 +108,38 @@ export function Cart() {
                         <p className="text-sm text-gray-600 mb-2 italic break-words">
                           💌 "{item.customMessage}"
                         </p>
+                      )}
+
+                      {/* Design Studio spec: mini preview + the full recipe */}
+                      {item.customization && (
+                        <div className="mt-3 mb-2 flex gap-3 sm:gap-4 items-center bg-rose-50/70 border border-pink-100 rounded-2xl p-3">
+                          <BouquetPreview
+                            qtys={item.customization.flowers}
+                            wrapId={item.customization.wrapColor}
+                            ribbonId={item.customization.ribbonColor}
+                            sizeId={item.customization.size}
+                            wrapStyleId={item.customization.wrapStyle}
+                            ribbonStyleId={item.customization.ribbonStyle}
+                            lookId={item.customization.look}
+                            uid={`cart-${item.bouquet.id}`}
+                            className="w-20 sm:w-24 shrink-0 rounded-xl"
+                          />
+                          <div className="min-w-0 text-xs sm:text-sm text-gray-600 space-y-0.5">
+                            <p className="font-semibold text-gray-800 flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                              <Sparkles className="w-3 h-3 text-rose-500" /> Your custom design
+                            </p>
+                            <p className="break-words">{flowerSummary(item.customization.flowers)}</p>
+                            <p>
+                              Wrap: {getWrapStyle(item.customization.wrapStyle).name} · {getWrap(item.customization.wrapColor).name}
+                            </p>
+                            <p>
+                              Ribbon: {getRibbonStyle(item.customization.ribbonStyle).name} · {getRibbon(item.customization.ribbonColor).name}
+                            </p>
+                            <p>
+                              Blooms: {getBloomLook(item.customization.look).name} · Size: {getSize(item.customization.size).name}
+                            </p>
+                          </div>
+                        </div>
                       )}
 
                       <div className="flex flex-wrap items-center justify-between gap-3 mt-4">

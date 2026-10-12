@@ -6,11 +6,18 @@ const orderSchema = new mongoose.Schema({
   // reject it ("Cast to ObjectId failed for value ORD-…").
   _id: { type: String },
   items: [{
-    bouquet: { type: mongoose.Schema.Types.ObjectId, ref: 'Bouquet', required: true },
+    // Optional: Design Studio custom bouquets are built to order and have no
+    // catalog product behind them — those items instead carry `name` plus the
+    // full `customization` spec (validated and priced server-side at checkout).
+    bouquet: { type: mongoose.Schema.Types.ObjectId, ref: 'Bouquet' },
     quantity: { type: Number, required: true, min: 1 },
     customMessage: { type: String, default: '' },
     deliveryDate: { type: String, default: '' },
     price: { type: Number, required: true },
+    name: { type: String, default: '' },
+    // Mixed (not a nested schema) so regular items don't get an empty
+    // customization object serialized into their JSON.
+    customization: { type: mongoose.Schema.Types.Mixed },
   }],
   total: { type: Number, required: true },
   deliveryFee: { type: Number, default: 0 },

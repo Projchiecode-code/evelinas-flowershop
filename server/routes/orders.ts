@@ -7,6 +7,7 @@ import { errorResponse } from '../utils/httpError';
 import { authenticate } from '../middleware/auth';
 import { parsePage, envelope } from '../utils/pagination';
 import { LOW_STOCK_THRESHOLD, maybeAlertLowStock } from '../utils/lowStock';
+import { validateStudioCustomization } from '../data/studioPricing';
 
 // Mirrors the status enum on the Order schema (kept as a literal union so
 // assignments to `order.status` typecheck after runtime validation).
@@ -108,10 +109,27 @@ router.post('/', authenticate, async (req: any, res) => {
       customMessage: string;
       deliveryDate: string;
       price: number;
+      name?: string;
+      customization?: any;
     }>;
     try {
       populatedItems = await Promise.all(
         items.map(async (item: any) => {
+          // Design Studio custom bouquets aren't catalog products: validate
+          // the design and price it from the studio's stem table instead of
+          // looking a product up (the client never decides the price).
+          if (item.customization !== undefined && item.customization !== null) {
+            const { customization, price, sizeName } = validateStudioCustomization(item.customization);
+            return {
+              bouquet: undefined,
+              name: `Custom Bouquet (${sizeName})`,
+              customization,
+              quantity: Number(item.quantity),
+              customMessage: item.customMessage || '',
+              deliveryDate: item.deliveryDate || '',
+              price,
+            };
+          }
           const bouquet = await Bouquet.findById(item.bouquet);
           if (!bouquet) throw new Error(`Bouquet not available: ${item.bouquet}`);
           return {
@@ -150,6 +168,8 @@ router.post('/', authenticate, async (req: any, res) => {
     // once — and only once — this order is actually committed.
     const lowStockCrossings: Array<{ id: any; name: string; prev: number; next: number }> = [];
     for (const item of populatedItems) {
+      // Custom bouquets are made to order — nothing to reserve in the catalog.
+      if (!item.bouquet) continue;
       const updated = await Bouquet.findOneAndUpdate(
         { _id: item.bouquet, inStock: true, stock: { $gte: item.quantity } },
         { $inc: { stock: -item.quantity } },
@@ -318,6 +338,7 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
     if (status === 'cancelled' && previousStatus !== 'cancelled' && order.stockReserved) {
       try {
         for (const item of order.items) {
+          if (!(item as any).bouquet) continue; // custom designs hold no stock
           await Bouquet.updateOne({ _id: item.bouquet }, { $inc: { stock: item.quantity } });
         }
       } catch (err) {
@@ -330,6 +351,7 @@ router.patch('/:id/status', authenticate, async (req: any, res) => {
       let blockedItem: { id: any; qty: number } | null = null;
       for (const item of order.items) {
         const id = (item as any).bouquet;
+        if (!id) continue; // custom designs hold no stock
         const qty = item.quantity;
         const ok = await Bouquet.findOneAndUpdate(
           { _id: id, inStock: true, stock: { $gte: qty } },

@@ -32,7 +32,7 @@ const OBJECT_ID = /^[0-9a-f]{24}$/i;
 async function buildOrderItems(cart: CartItem[]) {
   const byName = new Map<string, string>();
 
-  if (cart.some(item => !OBJECT_ID.test(item.bouquet.id))) {
+  if (cart.some(item => !item.customization && !OBJECT_ID.test(item.bouquet.id))) {
     let products: any[] = [];
     try {
       products = (await productApi.getAll()) as any[];
@@ -52,6 +52,17 @@ async function buildOrderItems(cart: CartItem[]) {
 
   return Promise.all(
     cart.map(async item => {
+      // Design Studio designs aren't catalog products: the item carries the
+      // full spec instead of a bouquet id (the server prices it itself).
+      if (item.customization) {
+        return {
+          quantity: item.quantity,
+          customMessage: item.customMessage || '',
+          deliveryDate: item.deliveryDate || '',
+          customization: item.customization,
+        };
+      }
+
       const localId = item.bouquet.id;
       const bouquetId = OBJECT_ID.test(localId) ? localId : byName.get(item.bouquet.name.trim().toLowerCase());
 

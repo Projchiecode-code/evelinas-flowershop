@@ -20,6 +20,23 @@ export interface CartItem {
   deliveryDate?: string;
   /** Price snapshot stored on the order item at purchase time (from the API). */
   price?: number;
+  /** Design Studio spec — present only for custom-designed bouquets. */
+  customization?: BouquetCustomization;
+}
+
+/**
+ * Design Studio bouquet spec (ids resolved to names client-side via
+ * data/studio.ts; validated + priced server-side via server/data/studioPricing.ts).
+ */
+export interface BouquetCustomization {
+  /** flowerId -> number of stems. */
+  flowers: Record<string, number>;
+  wrapStyle: string;
+  wrapColor: string;
+  ribbonStyle: string;
+  ribbonColor: string;
+  size: string;
+  look: string;
 }
 
 export type PaymentMethod = 'cod' | 'e-wallet' | 'bank-transfer';
@@ -68,9 +85,17 @@ export type OrderStatus =
   | 'rated'
   | 'cancelled';
 
-/** Payload sent to POST /orders — bouquet references are ids, not objects. */
+/** Payload sent to POST /orders — bouquet references are ids, not objects.
+ * Design Studio items skip `bouquet` and carry the `customization` spec
+ * instead (the server prices those from its own stem table). */
 export interface OrderPayload {
-  items: { bouquet: string; quantity: number; customMessage?: string; deliveryDate?: string }[];
+  items: {
+    bouquet?: string;
+    quantity: number;
+    customMessage?: string;
+    deliveryDate?: string;
+    customization?: BouquetCustomization;
+  }[];
   total: number;
   status: OrderStatus;
   customerName: string;

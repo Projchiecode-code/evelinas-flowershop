@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Order, OrderStatus, OrderPayload } from '../types';
 import { orderApi } from '../api/client';
+import { flowerPhoto } from '../data/studio';
 import { useAuth } from './AuthContext';
 
 interface OrderContextType {
@@ -43,7 +44,24 @@ export function normalizeOrder(raw: any): Order {
       price: Number(item?.price) || 0,
       bouquet: item?.bouquet
         ? { ...item.bouquet, id: item.bouquet.id || item.bouquet._id || '' }
-        : item.bouquet,
+        : item?.customization
+          ? {
+              // Design Studio order line: no catalog product backs it, so
+              // build a display-only bouquet from the item's snapshot. The
+              // full spec rides along as `customization`.
+              id: '',
+              name: item?.name || 'Custom Bouquet',
+              description: '',
+              price: Number(item?.price) || 0,
+              image: flowerPhoto(Object.keys(item.customization.flowers || {})[0] || ''),
+              category: 'Custom Design',
+              occasion: [],
+              popularity: 0,
+              inStock: true,
+              stock: Number.MAX_SAFE_INTEGER,
+              flowers: [],
+            }
+          : item?.bouquet,
     })),
   } as Order;
 }

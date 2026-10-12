@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { useOrders } from '../contexts/OrderContext';
 import { OrderStatus } from '../types';
 import { formatCurrency } from '../utils/currency';
+import { flowerSummary, getWrapStyle } from '../data/studio';
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; icon: React.ReactNode }> = {
   'to-pay':     { label: 'To Pay',     color: 'bg-amber-100 text-amber-700 border-amber-200',   icon: <CreditCard className="w-3 h-3" /> },
@@ -75,6 +76,11 @@ export function OrderHistory() {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-gray-800 text-sm truncate">{item.bouquet?.name || 'Product no longer available'}</p>
                               <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
+                              {item.customization && (
+                                <p className="text-xs text-rose-500 truncate">
+                                  ✨ {flowerSummary(item.customization.flowers)} · {getWrapStyle(item.customization.wrapStyle).name} wrap
+                                </p>
+                              )}
                             </div>
                             <p className="font-bold text-rose-600 text-sm">{formatCurrency((item.bouquet?.price ?? item.price ?? 0) * item.quantity)}</p>
                           </div>

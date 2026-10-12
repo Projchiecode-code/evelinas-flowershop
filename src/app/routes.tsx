@@ -18,6 +18,7 @@ const OrderConfirmation = lazy(() => import('./pages/OrderConfirmation').then(m 
 const OrderTracking = lazy(() => import('./pages/OrderTracking').then(m => ({ default: m.OrderTracking })));
 const OrderHistory = lazy(() => import('./pages/OrderHistory').then(m => ({ default: m.OrderHistory })));
 const AIRecommendations = lazy(() => import('./pages/AIRecommendations').then(m => ({ default: m.AIRecommendations })));
+const DesignStudio = lazy(() => import('./pages/DesignStudio').then(m => ({ default: m.DesignStudio })));
 const Favorites = lazy(() => import('./pages/Favorites').then(m => ({ default: m.Favorites })));
 const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { index: true, Component: Home },
       { path: 'catalog', Component: Catalog },
       { path: 'shop', Component: Catalog },
+      { path: 'design-studio', Component: DesignStudio },
       { path: 'bouquet/:id', Component: BouquetDetail },
       { path: 'gallery', Component: Gallery },
       { path: 'cart', Component: Cart },

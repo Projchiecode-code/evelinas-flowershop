@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { CartItem, Bouquet } from '../types';
+import { CartItem, Bouquet, BouquetCustomization } from '../types';
 import { authApi } from '../api/client';
 
 interface CartContextType {
   cart: CartItem[];
   isLoading: boolean;
-  addToCart: (bouquet: Bouquet, quantity: number, customMessage?: string, deliveryDate?: string) => void;
+  addToCart: (
+    bouquet: Bouquet,
+    quantity: number,
+    customMessage?: string,
+    deliveryDate?: string,
+    customization?: BouquetCustomization,
+  ) => void;
   removeFromCart: (bouquetId: string) => void;
   updateQuantity: (bouquetId: string, quantity: number) => void;
   clearCart: () => void;
@@ -55,17 +61,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addToCart = (bouquet: Bouquet, quantity: number, customMessage?: string, deliveryDate?: string) => {
+  const addToCart = (
+    bouquet: Bouquet,
+    quantity: number,
+    customMessage?: string,
+    deliveryDate?: string,
+    customization?: BouquetCustomization,
+  ) => {
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.bouquet.id === bouquet.id);
       if (existingItem) {
         return prevCart.map(item =>
           item.bouquet.id === bouquet.id
-            ? { ...item, quantity: item.quantity + quantity, customMessage, deliveryDate }
+            ? { ...item, quantity: item.quantity + quantity, customMessage, deliveryDate, customization }
             : item
         );
       }
-      return [...prevCart, { bouquet, quantity, customMessage, deliveryDate }];
+      return [...prevCart, { bouquet, quantity, customMessage, deliveryDate, customization }];
     });
   };
 
