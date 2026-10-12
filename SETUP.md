@@ -23,7 +23,7 @@ npm install
 
 ## 3. Paste your `.env`
 
-Chie sends the `.env` file **separately** (it contains secrets, so it is
+i will sends the `.env` file **separately** (it contains secrets, so it is
 never posted in chat or committed to GitHub — it is already listed in
 `.gitignore`). Drop it in the **project root**, next to `package.json`:
 
