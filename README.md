@@ -128,7 +128,7 @@ Health check: `GET /api/health` → `{ "status": "ok", "message": "Evelina's Flo
 | | `GET /:id` | public | Single product |
 | | `POST /`, `PUT /:id`, `DELETE /:id` | admin | CRUD |
 | | `GET /seed`, `POST /seed` | admin | Re-seed demo catalog |
-| `/api/orders` | `POST /` | authenticated | Place order (atomic stock reservation) |
+| `/api/orders` | `POST /` | authenticated | Place order (atomic stock reservation; Design Studio custom bouquets are validated & priced server-side and never reserve stock) |
 | | `GET /` | customer sees own; admin sees all | List (`?page=` supported) |
 | | `GET /:id` | authenticated | Order detail |
 | | `PATCH /:id/status` | authenticated | Status transition; stock restock/re-reserve |
@@ -150,9 +150,17 @@ Health check: `GET /api/health` → `{ "status": "ok", "message": "Evelina's Flo
 | | `DELETE /:id` | authenticated | Dismiss |
 | `/api/users` | `GET /`, `GET /:id`, `PATCH /:id`, `DELETE /:id` | admin | Account administration |
 | | `PATCH /me` | authenticated | Update own profile (whitelisted fields) |
+| `/api/settings` | `GET /ai-budget` | public | AI Picks budget brackets (admin-editable) |
+| | `PATCH /ai-budget` | admin | Update the three bracket thresholds |
+| `/api/stream` | `GET /?token=<jwt>` | authenticated | Server-Sent Events feed for real-time updates (JWT rides in the query because EventSource cannot send headers). Events: `hello`, `notification:new`, `order:status`, `order:new`; 25 s comment heartbeat; the 30 s client polls remain as fallback |
+| `/api/recommendations` | `GET /co-orders` | public | Collaborative-filtering table — "customers who ordered X also ordered Y" pair counts aggregated from non-cancelled orders (distinct orders & customers per pair, 60 s in-memory cache, keyed by product name to bridge Mongo ↔ catalogue ids) |
+| `/api/ai` | `GET /status` | public | Whether the AI gift-message writer is configured (`{ available, model }`) |
+| | `POST /gift-message` | public | Generate a ≤ 2-sentence gift message via Gemini (server-held key, catalog-grounded, prompt-injection hardened); `503` when no `GEMINI_API_KEY` is set |
 
 \* Rate-limited: **10 attempts / 15 minutes** per IP on `register` and `login`
 (successful requests don't count), returning `429` with a friendly message.
+The AI gift-message writer is separately limited to **10 requests / minute**
+per IP.
 
 ### Authentication
 
@@ -214,6 +222,34 @@ alert.
 **Payload limits.** JSON bodies are capped at **10 MB**; individual uploaded
 images (gallery, review photos, payment proofs) are rejected above **1.5 MB**
 with `400`. Clients compress images before upload.
+
+**AI personalization.** Recommendations come from a hybrid engine fed by
+backend data:
+
+- *Collaborative filtering* — `GET /api/recommendations/co-orders`
+  aggregates every non-cancelled order into "customers who ordered X also
+  ordered Y" pair counts (distinct orders and customers per pair, keyed by
+  product name to bridge MongoDB ids ↔ storefront catalogue ids, cached
+  60 s). The client merges this table into its scoring, so recommendations
+  learn from real purchase behaviour and need no retraining.
+- *Rule-based expert system + behavioural signals* run client-side over
+  live backend data: approved reviews (star averages), the shopper's order
+  history, favourites and view history. The budget brackets behind the
+  AI Picks quiz are stored server-side at `/api/settings/ai-budget`, so the
+  shop owner tunes the knowledge base without a deploy.
+- *LLM gift assistant* — `POST /api/ai/gift-message` calls Gemini with the
+  bouquet's real name and flowers as grounding, a locked system prompt
+  (≤ 2 sentences, injection-hardened), a per-IP rate limit and a 15 s
+  timeout. The key never leaves server env and the whole feature
+  self-disables (`503` / `available: false`) when unconfigured.
+
+**Real-time updates.** `GET /api/stream` holds one Server-Sent Events
+connection per signed-in viewer (JWT in the query string because
+EventSource cannot send headers; 25 s heartbeat). Order creation, status
+transitions and notification writes all call `server/utils/sse.ts`, which
+pushes `order:new`, `order:status` and `notification:new` instantly to the
+affected customer and every open admin dashboard. The 30 s client polls
+remain only as a fallback for dropped connections.
 
 **Notifications.** Tied to a user (`user: <id>`) or broadcast (`user: null`);
 `link` must be a relative app path, enforced server-side.
