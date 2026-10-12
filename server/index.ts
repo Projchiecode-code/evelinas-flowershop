@@ -13,6 +13,7 @@ import userRoutes from './routes/users';
 import settingsRoutes from './routes/settings';
 import streamRoutes from './routes/stream';
 import recommendationRoutes from './routes/recommendations';
+import aiRoutes from './routes/ai';
 import Bouquet from './models/Bouquet';
 import { getJwtSecret } from './middleware/auth';
 import { errorResponse } from './utils/httpError';
@@ -58,6 +59,8 @@ app.use('/api/settings', settingsRoutes);
 // Real-time push (SSE) and the collaborative-filtering stats behind AI Picks.
 app.use('/api/stream', streamRoutes);
 app.use('/api/recommendations', recommendationRoutes);
+// AI gift-message writer (server-held Gemini key, optional).
+app.use('/api/ai', aiRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   errorResponse(res, err.status || 500, err);

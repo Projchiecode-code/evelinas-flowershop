@@ -131,6 +131,13 @@ export const recommendationApi = {
   getCoOrders: () => api.get('/recommendations/co-orders'),
 };
 
+// AI gift-message assistant (Gemini key stays on the server; the browser
+// only ever sees an available/not-available flag and generated text)
+export const aiApi = {
+  status: () => api.get('/ai/status'),
+  giftMessage: (data: any) => api.post('/ai/gift-message', data),
+};
+
 // Reviews
 export const reviewApi = {
   create: (data: any) => api.post('/reviews', data),

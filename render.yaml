@@ -19,6 +19,12 @@ services:
         generateValue: true
       - key: FRONTEND_URL
         value: https://evelinas-flowershop.onrender.com
+      # Optional: enables the AI gift-message writer (POST /api/ai/gift-message).
+      # Create a free key at https://aistudio.google.com/apikey, then set its
+      # value in the Render dashboard (Service → Environment). Without it the
+      # storefront simply hides the AI writer button.
+      - key: GEMINI_API_KEY
+        sync: false
 
   # Frontend Static Site
   - type: web

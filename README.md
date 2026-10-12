@@ -229,6 +229,8 @@ with `400`. Clients compress images before upload.
 | `PORT` | no (default `3001`) | HTTP port |
 | `FRONTEND_URL` | no (default `http://localhost:5173`) | Allowed CORS origin |
 | `NODE_ENV` | no | Selects production behavior (secret enforcement, etc.) |
+| `GEMINI_API_KEY` | no | Google AI Studio key enabling the AI gift-message writer (`GET /api/ai/status`, `POST /api/ai/gift-message`); the feature disables itself when absent. Key is server-only, never sent to clients |
+| `GEMINI_MODEL` | no (default `gemini-3.5-flash-lite`) | Gemini model used for gift messages (free-tier-friendly flash class) |
 
 Client-side build variable (separate SPA build): `VITE_API_URL` (defaults to
 `http://localhost:3001/api`).

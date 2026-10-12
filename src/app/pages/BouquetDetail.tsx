@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { AIRecommendationEngine, buildSignals, CoOrderMap } from '../utils/aiRecommendations';
 import { fetchCoOrders } from '../utils/coOrders';
 import { recordView, getRecentViews } from '../utils/viewHistory';
+import { aiApi } from '../api/client';
 import { toast } from 'sonner';
 import { compressImage } from '../utils/imageCompress';
 
@@ -64,6 +65,41 @@ export function BouquetDetail() {
 
   const [quantity, setQuantity] = useState(1);
   const [customMessage, setCustomMessage] = useState('');
+  // AI gift-message writer: the button only appears when the server has a
+  // Gemini key configured (/ai/status) — the key itself never reaches the
+  // browser, and every failure leaves the shopper's own typing untouched.
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiHint, setAiHint] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    aiApi.status()
+      .then((s: any) => { if (alive) setAiAvailable(!!s?.available); })
+      .catch(() => { /* no assistant configured — button stays hidden */ });
+    return () => { alive = false; };
+  }, []);
+
+  const handleAiMessage = async (tone: string) => {
+    setAiLoading(true);
+    setAiHint('');
+    try {
+      // Grounded on this exact bouquet so the message can mention its real
+      // flowers; the model still keeps it to two sentences.
+      const res: any = await aiApi.giftMessage({
+        tone,
+        bouquetName: bouquet?.name || '',
+        flowers: (bouquet?.flowers || []).join(', '),
+        occasion: bouquet?.occasion?.[0] || '',
+      });
+      if (res?.message) setCustomMessage(res.message);
+      else setAiHint("Couldn't write one just now — try again, or write your own ✍️");
+    } catch {
+      setAiHint("Couldn't write one just now — try again, or write your own ✍️");
+    } finally {
+      setAiLoading(false);
+    }
+  };
   const [deliveryDate, setDeliveryDate] = useState('');
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
@@ -238,6 +274,23 @@ export function BouquetDetail() {
             <div>
               <Label className="font-semibold text-gray-800 mb-2 block">Custom Message (Optional)</Label>
               <Textarea placeholder="Write a heartfelt message..." value={customMessage} onChange={e => setCustomMessage(e.target.value)} rows={2} className="border-pink-200 focus:border-rose-400 resize-none" />
+              {aiAvailable && (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className="text-xs text-gray-500">✨ AI writer:</span>
+                  {[
+                    { value: 'warm', label: 'Warm & Sweet' },
+                    { value: 'romantic', label: 'Romantic' },
+                    { value: 'funny', label: 'Funny' },
+                    { value: 'formal', label: 'Formal' },
+                  ].map(tone => (
+                    <Button key={tone.value} type="button" size="sm" variant="outline" disabled={aiLoading} onClick={() => handleAiMessage(tone.value)} className="h-7 px-2 text-xs border-pink-200 hover:border-rose-400">
+                      {tone.label}
+                    </Button>
+                  ))}
+                  {aiLoading && <span className="text-xs text-rose-500">Writing…</span>}
+                </div>
+              )}
+              {aiHint && <p className="text-xs text-amber-600 mt-1">{aiHint}</p>}
             </div>
 
             {/* CTA */}
