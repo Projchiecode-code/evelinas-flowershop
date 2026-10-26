@@ -1,3 +1,6 @@
+import dns from 'node:dns';
+dns.setServers(['8.8.8.8']);
+ 
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -68,7 +71,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 const start = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/evelinas-flowershop');
+    await mongoose.connect(process.env.MONGODB_URI! || 'mongodb://localhost:27017/evelinas-flowershop');
     console.log('MongoDB connected');
 
     // One-time stock backfill for products created before quantity tracking:

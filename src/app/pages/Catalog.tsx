@@ -27,6 +27,8 @@ export function Catalog() {
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 150]);
   const [sortBy, setSortBy] = useState('popularity');
 
+  const [filterOpen, setFilterOpen] = useState(false);
+
   // Write the active filters into the query string (replace, not push, so
   // typing doesn't spam history) — a filtered catalog becomes shareable and
   // survives refresh.
@@ -51,6 +53,20 @@ export function Catalog() {
     if (urlOccasions.join(',') !== selectedOccasions.join(',')) setSelectedOccasions(urlOccasions);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  useEffect(() => {
+  const handleResize = () => {
+    if (window.innerWidth >= 1024) {
+      setFilterOpen(false);
+    }
+  };
+
+  window.addEventListener('resize', handleResize);
+
+  return () => {
+    window.removeEventListener('resize', handleResize);
+  };
+}, []);
 
   const filtered = useMemo(() => {
     let list = [...bouquets];
@@ -82,10 +98,10 @@ export function Catalog() {
   const clearAll = () => { setSelectedCategories([]); setSelectedOccasions([]); setPriceRange([0, 150]); setSearch(''); };
 
   const FilterContent = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 px-4">
       <div>
-        <h3 className="font-semibold text-gray-800 mb-3">Category</h3>
-        <div className="space-y-2">
+        <h3 className="font-semibold text-gray-800 mb-1">Category</h3>
+        <div className="space-y-1">
           {categories.map(cat => (
             <label key={cat} className="flex items-center gap-2 cursor-pointer group">
               <Checkbox
@@ -93,14 +109,14 @@ export function Catalog() {
                 onCheckedChange={() => toggle(selectedCategories, cat, setSelectedCategories)}
                 className="border-pink-300 data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500"
               />
-              <span className="text-sm text-gray-700 group-hover:text-rose-600">{cat}</span>
+              <span className="text-xs text-gray-700 group-hover:text-rose-600">{cat}</span>
             </label>
           ))}
         </div>
       </div>
       <div>
-        <h3 className="font-semibold text-gray-800 mb-3">Occasion</h3>
-        <div className="space-y-2">
+        <h3 className="font-semibold text-gray-800 mb-1">Occasion</h3>
+        <div className="space-y-1">
           {occasions.map(occ => (
             <label key={occ} className="flex items-center gap-2 cursor-pointer group">
               <Checkbox
@@ -108,13 +124,13 @@ export function Catalog() {
                 onCheckedChange={() => toggle(selectedOccasions, occ, setSelectedOccasions)}
                 className="border-pink-300 data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500"
               />
-              <span className="text-sm text-gray-700 group-hover:text-rose-600">{occ}</span>
+              <span className="text-xs text-gray-700 group-hover:text-rose-600">{occ}</span>
             </label>
           ))}
         </div>
       </div>
       <div>
-        <h3 className="font-semibold text-gray-800 mb-3">
+        <h3 className="font-semibold text-gray-800 mb-1">
           Price: <span className="text-rose-600">₱{priceRange[0]} – ₱{priceRange[1]}</span>
         </h3>
         <Slider min={0} max={150} step={5} value={priceRange} onValueChange={v => setPriceRange(v as [number, number])} className="[&_[role=slider]]:bg-rose-500 [&_[role=slider]]:border-rose-500" />
@@ -147,7 +163,7 @@ export function Catalog() {
               className="pl-10 border-pink-200 focus:border-rose-400"
             />
           </div>
-          <Sheet>
+          <Sheet open={filterOpen} onOpenChange={setFilterOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" className="lg:hidden border-rose-200 text-rose-600">
                 <SlidersHorizontal className="w-4 h-4 mr-2" /> Filters
@@ -198,8 +214,8 @@ export function Catalog() {
         <div className="flex gap-8">
           {/* Desktop sidebar */}
           <aside className="hidden lg:block w-60 flex-shrink-0">
-            <div className="bg-white rounded-2xl border border-pink-100 p-6 sticky top-24">
-              <h2 className="font-bold text-gray-800 mb-5 flex items-center gap-2">
+            <div className="bg-white rounded-2xl border border-pink-100 p-4 sticky top-21">
+              <h2 className="font-bold text-gray-800 mb-1 flex items-center gap-2">
                 <Filter className="w-4 h-4 text-rose-500" /> Filters
               </h2>
               <FilterContent />

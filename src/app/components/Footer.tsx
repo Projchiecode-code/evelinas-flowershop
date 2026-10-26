@@ -39,7 +39,7 @@ export function Footer() {
             <ul className="space-y-2 text-sm">
               <li>
                 <Link to="/shop" className="hover:text-purple-400 transition-colors">
-                  Shop All
+                  Shop Now
                 </Link>
               </li>
               <li>

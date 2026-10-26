@@ -1,39 +1,68 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Bouquet } from '../types';
+import { Bouquet, GalleryPhoto } from '../types';
 
 interface FavoritesContextType {
   favorites: Bouquet[];
+  favoriteGalleryPhotos: GalleryPhoto[];
+
   isLoading: boolean;
+
   addFavorite: (bouquet: Bouquet) => void;
   removeFavorite: (bouquetId: string) => void;
   isFavorite: (bouquetId: string) => boolean;
   toggleFavorite: (bouquet: Bouquet) => void;
+
+  addGalleryFavorite: (photo: GalleryPhoto) => void;
+  removeGalleryFavorite: (photoId: string) => void;
+  isGalleryFavorite: (photoId: string) => boolean;
+  toggleGalleryFavorite: (photo: GalleryPhoto) => void;
 }
 
 const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
 const FAVORITES_STORAGE_KEY = 'evelinas_favorites';
+const GALLERY_FAVORITES_STORAGE_KEY = 'evelinas_gallery_favorites';
 
 export function FavoritesProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<Bouquet[]>([]);
+  const [favoriteGalleryPhotos, setFavoriteGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // localStorage can hold corrupt or foreign values (hand-edited, an older
-    // app version, another tab). A non-array here used to crash every page
-    // that maps over favorites, so validate before trusting it.
     try {
+      // Load bouquet favorites
       const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
+
       if (saved) {
         const parsed = JSON.parse(saved);
+
         setFavorites(
           Array.isArray(parsed)
             ? parsed.filter((f: unknown) => f && typeof f === 'object')
             : []
         );
       }
+
+      // Load gallery favorites
+      const savedGallery = localStorage.getItem(
+        GALLERY_FAVORITES_STORAGE_KEY
+      );
+
+      if (savedGallery) {
+        const parsedGallery = JSON.parse(savedGallery);
+
+        setFavoriteGalleryPhotos(
+          Array.isArray(parsedGallery)
+            ? parsedGallery.filter(
+                (f: unknown) => f && typeof f === 'object'
+              )
+            : []
+        );
+      }
     } catch {
       setFavorites([]);
+      setFavoriteGalleryPhotos([]);
     }
+
     setIsLoading(false);
   }, []);
 
@@ -47,6 +76,19 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [favorites, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      try {
+        localStorage.setItem(
+          GALLERY_FAVORITES_STORAGE_KEY,
+          JSON.stringify(favoriteGalleryPhotos)
+        );
+      } catch {
+        // Storage full or unavailable
+      }
+    }
+  }, [favoriteGalleryPhotos, isLoading]);
 
   const addFavorite = (bouquet: Bouquet) => {
     setFavorites(prev => prev.some(b => b.id === bouquet.id) ? prev : [...prev, bouquet]);
@@ -62,8 +104,49 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     isFavorite(bouquet.id) ? removeFavorite(bouquet.id) : addFavorite(bouquet);
   };
 
+  const addGalleryFavorite = (photo: GalleryPhoto) => {
+    setFavoriteGalleryPhotos(prev =>
+      prev.some(p => p.id === photo.id)
+        ? prev
+        : [...prev, photo]
+    );
+  };
+
+  const removeGalleryFavorite = (photoId: string) => {
+    setFavoriteGalleryPhotos(prev =>
+      prev.filter(p => p.id !== photoId)
+    );
+  };
+
+  const isGalleryFavorite = (photoId: string) => {
+    return favoriteGalleryPhotos.some(p => p.id === photoId);
+  };
+
+  const toggleGalleryFavorite = (photo: GalleryPhoto) => {
+    isGalleryFavorite(photo.id)
+      ? removeGalleryFavorite(photo.id)
+      : addGalleryFavorite(photo);
+  };
+
   return (
-    <FavoritesContext.Provider value={{ favorites, isLoading, addFavorite, removeFavorite, isFavorite, toggleFavorite }}>
+    <FavoritesContext.Provider
+      value={{
+        favorites,
+        favoriteGalleryPhotos,
+
+        isLoading,
+
+        addFavorite,
+        removeFavorite,
+        isFavorite,
+        toggleFavorite,
+
+        addGalleryFavorite,
+        removeGalleryFavorite,
+        isGalleryFavorite,
+        toggleGalleryFavorite,
+      }}
+    >
       {children}
     </FavoritesContext.Provider>
   );

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import GalleryPhoto from '../models/GalleryPhoto';
+import GalleryLike from '../models/GalleryLike';
+import GalleryComment from '../models/GalleryComment';
 import { errorResponse } from '../utils/httpError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { parsePage, envelope } from '../utils/pagination';
@@ -55,6 +57,58 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
     }
     const photos = await GalleryPhoto.find().sort({ createdAt: -1 });
     res.json(photos);
+  } catch (err: any) {
+    errorResponse(res, 500, err);
+  }
+});
+
+// Get comments for a gallery photo
+router.get('/:id/comments', async (req, res) => {
+  try {
+    const comments = await GalleryComment.find({
+      photo: req.params.id,
+      approved: true,
+    }).sort({ createdAt: 1 });
+
+    res.json(comments);
+  } catch (err: any) {
+    errorResponse(res, 500, err);
+  }
+});
+
+// Add a comment
+router.post('/:id/comments', authenticate, async (req: any, res) => {
+  try {
+    const { authorName, text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({
+        error: 'Comment text is required',
+      });
+    }
+
+    const photo = await GalleryPhoto.findById(req.params.id);
+
+    if (!photo) {
+      return res.status(404).json({
+        error: 'Photo not found',
+      });
+    }
+
+    const comment = new GalleryComment({
+      photo: photo._id,
+      user: req.userId,
+      authorName:
+        typeof authorName === 'string' && authorName.trim()
+          ? authorName.trim().slice(0, 120)
+          : 'Anonymous',
+      text: text.trim().slice(0, 1000),
+      approved: true,
+    });
+
+    await comment.save();
+
+    res.status(201).json(comment);
   } catch (err: any) {
     errorResponse(res, 500, err);
   }
@@ -125,15 +179,59 @@ router.patch('/:id/feature', authenticate, requireAdmin, async (req: any, res) =
   }
 });
 
-router.patch('/:id/like', async (req, res) => {
+router.get('/:id/like', authenticate, async (req: any, res) => {
+  try {
+    const like = await GalleryLike.findOne({
+      photo: req.params.id,
+      user: req.userId,
+    });
+
+    res.json({
+      liked: !!like,
+    });
+  } catch (err: any) {
+    errorResponse(res, 500, err);
+  }
+});
+
+router.patch('/:id/like', authenticate, async (req: any, res) => {
   try {
     const photo = await GalleryPhoto.findById(req.params.id);
+
     if (!photo) {
-      return res.status(404).json({ error: 'Photo not found' });
+      return res.status(404).json({
+        error: 'Photo not found',
+      });
     }
-    photo.likes += 1;
+
+    const existingLike = await GalleryLike.findOne({
+      photo: photo._id,
+      user: req.userId,
+    });
+
+    if (existingLike) {
+      // Unlike
+      await GalleryLike.deleteOne({
+        _id: existingLike._id,
+      });
+
+      photo.likes = Math.max(0, photo.likes - 1);
+    } else {
+      // Like
+      await GalleryLike.create({
+        photo: photo._id,
+        user: req.userId,
+      });
+
+      photo.likes += 1;
+    }
+
     await photo.save();
-    res.json(photo);
+
+    res.json({
+      photo,
+      liked: !existingLike,
+    });
   } catch (err: any) {
     errorResponse(res, 500, err);
   }

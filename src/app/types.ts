@@ -142,6 +142,7 @@ export interface GalleryPhoto {
   bouquetId?: string;
   bouquetName?: string;
   customerName: string;
+  customer?: string;
   imageUrl: string;
   caption: string;
   approved: boolean;

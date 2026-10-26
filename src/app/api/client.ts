@@ -152,14 +152,33 @@ export const reviewApi = {
 export const galleryApi = {
   submit: (data: any) => api.post('/gallery', data),
   getAll: () => api.get('/gallery'),
+
   // Paginated fetch — returns `{ items, total, page, pages, limit }`.
   getPage: (base: string, page: number, limit: number) =>
     api.get(`${base}?page=${page}&limit=${limit}`),
+
   getApproved: () => api.get('/gallery/approved'),
   getFeatured: () => api.get('/gallery/featured'),
+  
   approve: (id: string) => api.patch(`/gallery/${id}/approve`),
   feature: (id: string) => api.patch(`/gallery/${id}/feature`),
+
+  getComments: (photoId: string) =>
+    api.get(`/gallery/${photoId}/comments`),
+
+  addComment: (
+    photoId: string,
+    authorName: string,
+    text: string
+  ) =>
+    api.post(`/gallery/${photoId}/comments`, {
+      authorName,
+      text,
+    }),
+  
   like: (id: string) => api.patch(`/gallery/${id}/like`),
+  getLikeStatus: (id: string) => api.get(`/gallery/${id}/like`),
+  
   delete: (id: string) => api.delete(`/gallery/${id}`),
 };
 

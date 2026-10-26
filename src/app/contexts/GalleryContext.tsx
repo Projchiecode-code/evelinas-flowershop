@@ -22,6 +22,9 @@ const INITIAL_COMMENTS: GalleryComment[] = [
 interface GalleryContextType {
   photos: GalleryPhoto[];
   comments: GalleryComment[];
+  
+  likedPhotos: Record<string, boolean>;
+  
   isLoading: boolean;
   /** Server-side count of real photos (demo posts excluded), all pages. */
   totalPosts: number;
@@ -69,6 +72,60 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [featuredPhotos, setFeaturedPhotos] = useState<GalleryPhoto[]>([]);
   const [comments, setComments] = useState<GalleryComment[]>(INITIAL_COMMENTS);
+
+  const fetchComments = async (items: GalleryPhoto[]) => {
+  try {
+    const realComments: GalleryComment[] = [];
+
+    await Promise.all(
+      items.map(async (photo) => {
+        // Only real MongoDB photos should call the API.
+        if (photo.id.startsWith('g')) return;
+
+        try {
+          const response = await galleryApi.getComments(photo.id);
+
+          const photoComments = Array.isArray(response)
+            ? response
+            : response?.comments || [];
+
+          realComments.push(
+            ...photoComments.map((comment: any) => ({
+              ...comment,
+              id: comment.id || comment._id,
+              photoId: comment.photoId || comment.photo,
+              createdAt: comment.createdAt
+                ? new Date(comment.createdAt)
+                : new Date(),
+              approved: comment.approved !== false,
+            }))
+          );
+        } catch (err) {
+          console.error(
+            `Failed to fetch comments for photo ${photo.id}:`,
+            err
+          );
+        }
+      })
+    );
+
+    setComments(prev => {
+      // Keep demo comments for demo photos.
+      const mockPhotoIds = new Set(
+        mockGallery.map(photo => photo.id)
+      );
+
+      const mockComments = prev.filter(comment =>
+        mockPhotoIds.has(comment.photoId)
+      );
+
+      return [...mockComments, ...realComments];
+    });
+  } catch (err) {
+    console.error('Failed to fetch gallery comments:', err);
+  }
+};
+
   const [isLoading, setIsLoading] = useState(true);
   const [totalPosts, setTotalPosts] = useState(0);
   const [page, setPage] = useState(1);
@@ -76,6 +133,9 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const { user } = useAuth();
+
+  const [likedPhotos, setLikedPhotos] = useState<Record<string, boolean>>({});
+
   const role = user?.role;
   // Which endpoint the currently loaded pages came from (admin sees pending
   // submissions too; guests and customers only see approved photos).
@@ -94,7 +154,15 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
       // Demo posts ride along with the public first page only (they never
       // paginate) — the admin moderation list shows real submissions, whose
       // ids actually resolve against the API.
-      setPhotos(role === 'admin' ? items : [...items, ...mockGallery]);
+      
+      const loadedPhotos =
+        role === 'admin' ? items : [...items, ...mockGallery];
+
+      setPhotos(loadedPhotos);
+
+      await fetchLikeStatuses(items);
+      await fetchComments(items);
+      
       setTotalPosts(Number(first?.total) || 0);
       setPage(1);
       setHasMore(Number(first?.page || 1) < Number(first?.pages || 1));
@@ -118,6 +186,32 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
       setHasMore(false);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchLikeStatuses = async (items: GalleryPhoto[]) => {
+    if (!user) {
+      setLikedPhotos({});
+      return;
+    }
+
+    try {
+      const statuses: Record<string, boolean> = {};
+
+      await Promise.all(
+        items.map(async (photo) => {
+          try {
+            const response = (await galleryApi.getLikeStatus(photo.id)) as { liked: boolean };
+            statuses[photo.id] = response.liked;
+          } catch {
+            statuses[photo.id] = false;
+          }
+        })
+      );
+
+      setLikedPhotos(statuses);
+    } catch (err) {
+      console.error('Failed to fetch like statuses:', err);
     }
   };
 
@@ -200,23 +294,102 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const likePhoto = async (id: string) => {
+    const likePhoto = async (photoId: string): Promise<void> => {
     try {
-      const res = await galleryApi.like(id);
-      const updated = normalizePhoto(res);
-      setPhotos(prev => prev.map(p => p.id === id ? updated : p));
-      setFeaturedPhotos(prev => prev.map(p => p.id === id ? updated : p));
+      // Mock/demo photos don't exist in MongoDB
+      if (photoId.startsWith('g')) {
+        setPhotos(prev =>
+          prev.map(photo =>
+            photo.id === photoId
+              ? {
+                  ...photo,
+                  likes: Math.max(0, photo.likes + (likedPhotos[photoId] ? -1 : 1)),
+                }
+              : photo
+          )
+        );
+
+        setLikedPhotos(prev => ({
+          ...prev,
+          [photoId]: !prev[photoId],
+        }));
+
+        return;
+      }
+
+      const response = (await galleryApi.like(photoId)) as {
+        photo: unknown;
+        liked: boolean;
+      };
+
+      const updatedPhoto = normalizePhoto(response.photo);
+
+      setPhotos(prev =>
+        prev.map(photo =>
+          photo.id === photoId
+            ? updatedPhoto
+            : photo
+        )
+      );
+
+      setLikedPhotos(prev => ({
+        ...prev,
+        [photoId]: response.liked,
+      }));
+
+      setFeaturedPhotos(prev =>
+        prev.map(photo =>
+          photo.id === photoId
+            ? updatedPhoto
+            : photo
+        )
+      );
+
     } catch (err) {
-      console.error('Like photo failed:', err);
+      console.error('Like/unlike failed:', err);
     }
   };
 
-  const addComment = async (photoId: string, authorName: string, text: string) => {
-    const newComment: GalleryComment = {
-      id: `c-${Date.now()}`, photoId, authorName: authorName.trim() || 'Anonymous',
-      text, createdAt: new Date(), approved: true,
-    };
-    setComments(prev => [...prev, newComment]);
+  const addComment = async (
+    photoId: string,
+    authorName: string,
+    text: string
+  ) => {
+    try {
+      // Mock/demo posts don't exist in MongoDB
+      if (photoId.startsWith('g')) {
+        const newComment: GalleryComment = {
+          id: `c-${Date.now()}`,
+          photoId,
+          authorName: authorName.trim() || 'Anonymous',
+          text: text.trim(),
+          createdAt: new Date(),
+          approved: true,
+        };
+
+        setComments(prev => [...prev, newComment]);
+        return;
+      }
+
+      const response = await galleryApi.addComment(
+        photoId,
+        authorName,
+        text
+      );
+
+      const newComment: GalleryComment = {
+        ...response,
+        id: response.id || response._id,
+        photoId: response.photoId || response.photo,
+        createdAt: response.createdAt
+          ? new Date(response.createdAt)
+          : new Date(),
+      };
+
+      setComments(prev => [...prev, newComment]);
+    } catch (err) {
+      console.error('Add comment failed:', err);
+    }
   };
 
   const deleteComment = async (id: string) => {
@@ -242,7 +415,7 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
 
   return (
     <GalleryContext.Provider value={{
-      photos, comments, isLoading, totalPosts, hasMore, isLoadingMore, loadMore,
+      photos, comments, likedPhotos, isLoading, totalPosts, hasMore, isLoadingMore, loadMore,
       submitPhoto, approvePhoto, deletePhoto, featurePhoto, likePhoto,
       addComment, deleteComment, approveComment, getCommentsForPhoto,
       getAllComments, getApprovedPhotos, getFeaturedPhotos, refetch,

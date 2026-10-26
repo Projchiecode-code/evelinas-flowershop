@@ -4,6 +4,8 @@ import { Link } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
+import { useFavorites } from '../contexts/FavoritesContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useGallery } from '../contexts/GalleryContext';
 import { useCart } from '../contexts/CartContext';
 import { useProducts } from '../contexts/ProductsContext';
@@ -15,21 +17,44 @@ import { compressImage } from '../utils/imageCompress';
 // ─── Post Card ────────────────────────────────────────────────────────────────
 function PostCard({ photo }: { photo: GalleryPhoto }) {
   const { bouquets } = useProducts();
-  const { likePhoto, addComment, getCommentsForPhoto } = useGallery();
+  const { likePhoto, likedPhotos, addComment, getCommentsForPhoto } = useGallery();
   const { addToCart } = useCart();
+  const {
+    toggleGalleryFavorite,
+    removeGalleryFavorite,
+    isGalleryFavorite,
+  } = useFavorites();
+  
+  const { user } = useAuth();
 
-  const [liked, setLiked] = useState(false);
+  const liked = likedPhotos[photo.id] || false;
+
+  const isAdmin = user?.role === 'admin';
+  const isOwner = !!user && photo.customer === user.id;
+  const isViewer = !isAdmin && !isOwner;
+  
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [commentName, setCommentName] = useState('');
   const [lightbox, setLightbox] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   const comments = getCommentsForPhoto(photo.id);
   const linkedBouquet = bouquets.find(b => b.id === photo.bouquetId);
 
+  const isSaved = isGalleryFavorite(photo.id);
+
+  const handleSave = () => {
+    toggleGalleryFavorite(photo);
+
+    toast.success(
+      isSaved
+        ? 'Removed from Favorites'
+        : 'Saved to Favorites ❤️'
+    );
+  };
+  
   const handleLike = () => {
-    if (liked) return;
-    setLiked(true);
     likePhoto(photo.id);
   };
 
@@ -38,6 +63,45 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
     addComment(photo.id, commentName || 'Anonymous', commentText);
     setCommentText('');
     toast.success('Comment posted!');
+  };
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/gallery?photo=${encodeURIComponent(photo.id)}`;
+
+    const shareData = {
+      title: photo.bouquetName
+        ? `${photo.bouquetName} | Evelina's Flowershop`
+        : "Evelina's Flowershop Gallery",
+      text: photo.caption || `Check out this beautiful bouquet from Evelina's Flowershop!`,
+      url: shareUrl,
+    };
+
+    try {
+      // Mobile browsers and supported desktop browsers
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+
+      // Fallback for browsers without Web Share API
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Link copied to clipboard! 🔗');
+    } catch (error) {
+      // User closing/canceling the share sheet isn't an error
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+
+      console.error('Share failed:', error);
+
+      // Last fallback
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success('Link copied to clipboard! 🔗');
+      } catch {
+        toast.error('Unable to share this post.');
+      }
+    }
   };
 
   const handleAddToCart = () => {
@@ -85,7 +149,85 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
               {photo.featured && <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 text-xs py-0">⭐ Featured</Badge>}
             </div>
           </div>
-          <button className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"><MoreHorizontal className="w-4 h-4" /></button>
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(prev => !prev)}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
+
+            {showMenu && (
+              <div className="absolute right-0 top-10 z-30 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2">
+
+                {/* SAVE — viewer/customer */}
+                {!isOwner && !isAdmin && (
+                  <button
+                    onClick={() => {
+                      handleSave();
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-rose-50"
+                  >
+                    <i className={`bi ${isSaved ? 'bi-bookmark-fill' : 'bi-bookmark'}`} />
+                    {isSaved ? 'Remove from Favorites' : 'Save to Favorites'}
+                  </button>
+                )}
+
+                {/* SHARE */}
+                <button
+                  onClick={() => {
+                    handleShare();
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-rose-50"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Share
+                </button>
+
+                {/* OWNER */}
+                {isOwner && (
+                  <button
+                    onClick={() => {
+                      // We'll connect this to deletePhoto later
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <i className="bi bi-trash" />
+                    Delete Post
+                  </button>
+                )}
+
+                {/* ADMIN */}
+                {isAdmin && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-rose-50"
+                    >
+                      <i className="bi bi-star" />
+                      {photo.featured ? 'Unfeature Post' : 'Feature Post'}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <i className="bi bi-trash" />
+                      Delete Post
+                    </button>
+                  </>
+                )}
+
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Caption */}
@@ -100,7 +242,7 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
 
         {/* Like / Comment counts */}
         <div className="flex items-center justify-between px-5 py-2 text-xs text-gray-400 border-b border-rose-50">
-          <span>{photo.likes + (liked ? 1 : 0)} likes</span>
+          <span>{photo.likes} likes</span>
           <button onClick={() => setShowComments(!showComments)} className="hover:text-rose-600 transition-colors">
             {comments.length} comment{comments.length !== 1 ? 's' : ''}
           </button>
@@ -122,7 +264,10 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
             <MessageCircle className="w-4 h-4" />
             Comment
           </button>
-          <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-blue-50 hover:text-blue-500 transition-all">
+          <button
+            onClick={handleShare}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-blue-50 hover:text-blue-500 transition-all"
+          >
             <Share2 className="w-4 h-4" />
             Share
           </button>
@@ -271,7 +416,7 @@ export function Gallery() {
 
       {/* Submit Post Modal */}
       {showSubmit && (
-        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden my-4">
             <div className="bg-gradient-to-r from-rose-500 to-purple-500 px-6 py-4 flex items-center justify-between">
               <h3 className="font-bold text-white">Create a Post</h3>
