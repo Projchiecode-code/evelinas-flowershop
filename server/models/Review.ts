@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const reviewSchema = new mongoose.Schema({
   bouquet: { type: mongoose.Schema.Types.ObjectId, ref: 'Bouquet', required: true },
-  orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+  orderId: { type: String },
   customerName: { type: String, required: true },
   customerEmail: { type: String, default: '' },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

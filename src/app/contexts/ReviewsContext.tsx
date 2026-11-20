@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Review } from '../types';
 import { reviewApi } from '../api/client';
 import { mockReviews } from '../data/reviews';
+import { useAuth } from './AuthContext';
 
 interface ReviewsContextType {
   reviews: Review[];
@@ -24,6 +25,8 @@ function normalizeReview(raw: any): Review {
   return {
     ...raw,
     id: raw?.id || raw?._id || '',
+    // Mongo stores the product ref as `bouquet`; the SPA filters on `bouquetId`.
+    bouquetId: raw?.bouquetId || raw?.bouquet || '',
     createdAt: raw?.createdAt ? new Date(raw.createdAt) : new Date(),
   } as Review;
 }
@@ -31,11 +34,17 @@ function normalizeReview(raw: any): Review {
 export function ReviewsProvider({ children }: { children: ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
 
-  const fetchReviews = async () => {
+  // Admins get the moderation queue (pending included); everyone else gets
+  // the public approved-only feed. Refetch when the role changes so logging
+  // in/out swaps the data set instead of leaving stale rows on screen.
+  const fetchReviews = useCallback(async () => {
     try {
       setIsLoading(true);
-      const apiReviews = await reviewApi.getAll();
+      const apiReviews = user?.role === 'admin'
+        ? await reviewApi.getAllForAdmin()
+        : await reviewApi.getAll();
       // Combine API reviews with mock reviews
       const combinedReviews = [
         ...(Array.isArray(apiReviews) ? apiReviews : []).map(normalizeReview),
@@ -48,11 +57,11 @@ export function ReviewsProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.role]);
 
   useEffect(() => {
     fetchReviews();
-  }, []);
+  }, [fetchReviews]);
 
   const addReview = async (data: Omit<Review, 'id' | 'createdAt' | 'approved'>) => {
     try {

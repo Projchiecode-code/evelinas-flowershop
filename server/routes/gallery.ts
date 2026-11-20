@@ -62,13 +62,19 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// Get comments for a gallery photo
+// Get comments for a gallery photo. Pending photos have no public page, so
+// their threads stay private; `user` (the commenter's account id) is never
+// part of the public payload.
 router.get('/:id/comments', async (req, res) => {
   try {
+    const photo = await GalleryPhoto.findById(req.params.id).select('approved');
+    if (!photo || !photo.approved) {
+      return res.json([]);
+    }
     const comments = await GalleryComment.find({
       photo: req.params.id,
       approved: true,
-    }).sort({ createdAt: 1 });
+    }).select('-user').sort({ createdAt: 1 });
 
     res.json(comments);
   } catch (err: any) {
@@ -89,7 +95,9 @@ router.post('/:id/comments', authenticate, async (req: any, res) => {
 
     const photo = await GalleryPhoto.findById(req.params.id);
 
-    if (!photo) {
+    // Pending submissions aren't public yet — nobody comments on them until
+    // an admin approves the post.
+    if (!photo || !photo.approved) {
       return res.status(404).json({
         error: 'Photo not found',
       });
@@ -198,7 +206,8 @@ router.patch('/:id/like', authenticate, async (req: any, res) => {
   try {
     const photo = await GalleryPhoto.findById(req.params.id);
 
-    if (!photo) {
+    // Only approved photos are likeable (pending posts have no public card).
+    if (!photo || !photo.approved) {
       return res.status(404).json({
         error: 'Photo not found',
       });

@@ -27,6 +27,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// The API serialises Mongo documents as `_id`; the rest of the SPA keys on
+// `user.id` (order ownership, gallery ownership, context refetches). Normalise
+// once at the boundary so `user.id` is always populated.
+function normalizeUser(raw: any): User {
+  return {
+    ...raw,
+    id: String(raw?.id || raw?._id || ''),
+  } as User;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,8 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = (await authApi.me()) as User;
-        setUser(res);
+        const res = await authApi.me();
+        setUser(normalizeUser(res));
       } catch (err) {
         // Only drop the stored token when the server actually rejected it —
         // a network blip shouldn't sign the user out.
@@ -53,9 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const res = (await authApi.login({ email, password })) as { user: User; token?: string };
+      const res = (await authApi.login({ email, password })) as { user: any; token?: string };
       if (res.token) api.setToken(res.token);
-      setUser(res.user);
+      setUser(normalizeUser(res.user));
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Login failed' };
@@ -64,9 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (name: string, email: string, password: string) => {
     try {
-      const res = (await authApi.register({ name, email, password })) as { user: User; token?: string };
+      const res = (await authApi.register({ name, email, password })) as { user: any; token?: string };
       if (res.token) api.setToken(res.token);
-      setUser(res.user);
+      setUser(normalizeUser(res.user));
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Registration failed' };

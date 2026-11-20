@@ -276,7 +276,14 @@ router.post('/', authenticate, async (req: any, res) => {
 router.get('/', authenticate, async (req: any, res) => {
   try {
     const filter: any = {};
-    if (req.userRole === 'customer') filter.customer = req.userId;
+    // Customers always see only their own orders. `?scope=mine` lets any
+    // caller (including an admin using the customer-facing tracker) request
+    // that same own-only view explicitly.
+    const wantsMine = req.query.scope === 'mine' || req.query.mine === '1';
+    // Default-deny: only a verified admin sees the shop-wide list. Any other
+    // role (including a legacy doc with no role, or a bad role written by an
+    // old admin update) is scoped to its own orders.
+    if (wantsMine || req.userRole !== 'admin') filter.customer = req.userId;
 
     const { paged, page, limit, skip } = parsePage(req, 50);
     if (paged) {
@@ -301,7 +308,8 @@ router.get('/:id', authenticate, async (req: any, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    if (req.userRole === 'customer' && order.customer?.toString() !== req.userId) {
+    // Default-deny: only admins may read an order they don't own.
+    if (req.userRole !== 'admin' && order.customer?.toString() !== req.userId) {
       return res.status(403).json({ error: 'Access denied' });
     }
     res.json(order);

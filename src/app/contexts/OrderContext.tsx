@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { Order, OrderStatus, OrderPayload } from '../types';
 import { orderApi } from '../api/client';
 import { flowerPhoto } from '../data/studio';
@@ -6,7 +6,10 @@ import { subscribeRealtime } from '../utils/realtime';
 import { useAuth } from './AuthContext';
 
 interface OrderContextType {
+  /** Full list: the signed-in customer's orders, or every order for an admin. */
   orders: Order[];
+  /** Always only the signed-in user's own orders — safe for customer pages. */
+  myOrders: Order[];
   isLoading: boolean;
   createOrder: (order: OrderPayload) => Promise<string>;
   getOrder: (orderId: string) => Promise<Order | undefined>;
@@ -70,7 +73,7 @@ export function normalizeOrder(raw: any): Order {
 export function OrderProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, user } = useAuth();
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -111,7 +114,17 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(refreshTimer);
       stopRealtime();
     };
-  }, [isAuthLoading, isAuthenticated, fetchOrders]);
+    // user?.id so signing into a different account refetches instead of
+    // leaving the previous account's orders on screen.
+  }, [isAuthLoading, isAuthenticated, user?.id, fetchOrders]);
+
+  // Admin accounts fetch the whole shop for the dashboard/order management.
+  // Customer-facing pages (track, history, profile, AI picks) must never show
+  // someone else's orders, so they read this own-only view instead.
+  const myOrders = useMemo(() => {
+    if (!user) return [];
+    return orders.filter(o => String(o.customer || '') === String(user.id));
+  }, [orders, user]);
 
   const createOrder = async (orderData: OrderPayload) => {
     const res = await orderApi.create(orderData);
@@ -154,7 +167,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <OrderContext.Provider value={{ orders, isLoading, createOrder, getOrder, updateOrderStatus, rateOrder, refetch }}>
+    <OrderContext.Provider value={{ orders, myOrders, isLoading, createOrder, getOrder, updateOrderStatus, rateOrder, refetch }}>
       {children}
     </OrderContext.Provider>
   );

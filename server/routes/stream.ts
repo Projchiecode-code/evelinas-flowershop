@@ -37,8 +37,8 @@ router.get('/', async (req, res) => {
     return res.status(401).json({ error: 'Token invalid' });
   }
 
-  const user = await User.findById(userId).select('role').lean();
-  if (!user) {
+  const user = await User.findById(userId).select('role isActive').lean();
+  if (!user || (user as any).isActive === false) {
     return res.status(401).json({ error: 'Token invalid' });
   }
 

@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import Review from '../models/Review';
+import User from '../models/User';
 import { errorResponse } from '../utils/httpError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { parsePage, envelope } from '../utils/pagination';
 
 const router = Router();
+
+// Public review responses never need the reviewer's email, account id or the
+// order id they came from — only the admin moderation list gets the full doc.
+const PUBLIC_REVIEW_FIELDS = '-customerEmail -customer -orderId';
 
 // Moderation (approve/feature/delete) is admin-only — otherwise the author of
 // an unapproved review could approve and feature it themselves.
@@ -36,12 +41,18 @@ router.post('/', authenticate, async (req: any, res) => {
         }
       }
     }
+    // Reviewer identity comes from the authenticated account, not the request
+    // body — otherwise anyone could post a review under another shopper's
+    // name/email.
+    const reviewer = await User.findById(req.userId).select('name email');
+    if (!reviewer) {
+      return res.status(401).json({ error: 'Account not found' });
+    }
     const review = new Review({
       bouquet: bouquetId,
       orderId: typeof orderId === 'string' ? orderId.slice(0, 60) : undefined,
-      customerName: typeof req.body.customerName === 'string' && req.body.customerName
-        ? req.body.customerName.slice(0, 120) : 'Anonymous',
-      customerEmail: typeof req.body.customerEmail === 'string' ? req.body.customerEmail.slice(0, 254) : '',
+      customerName: reviewer.name,
+      customerEmail: reviewer.email,
       customer: req.userId,
       rating: numericRating,
       comment,
@@ -56,9 +67,30 @@ router.post('/', authenticate, async (req: any, res) => {
   }
 });
 
+// Public feed — approved reviews only, with reviewer PII projected out.
 router.get('/', async (req, res) => {
   try {
     const { paged, page, limit, skip } = parsePage(req, 20);
+    const filter = { approved: true };
+    if (paged) {
+      const [items, total] = await Promise.all([
+        Review.find(filter).select(PUBLIC_REVIEW_FIELDS).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        Review.countDocuments(filter),
+      ]);
+      return res.json(envelope(items, total, page, limit));
+    }
+    const reviews = await Review.find(filter).select(PUBLIC_REVIEW_FIELDS).sort({ createdAt: -1 });
+    res.json(reviews);
+  } catch (err: any) {
+    errorResponse(res, 500, err);
+  }
+});
+
+// Moderation queue (unapproved included) — admin only. Registered before
+// `/:bouquetId` so "all" is never treated as a product id.
+router.get('/all', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { paged, page, limit, skip } = parsePage(req, 50);
     if (paged) {
       const [items, total] = await Promise.all([
         Review.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -75,7 +107,9 @@ router.get('/', async (req, res) => {
 
 router.get('/:bouquetId', async (req, res) => {
   try {
-    const reviews = await Review.find({ bouquet: req.params.bouquetId, approved: true }).sort({ createdAt: -1 });
+    const reviews = await Review.find({ bouquet: req.params.bouquetId, approved: true })
+      .select(PUBLIC_REVIEW_FIELDS)
+      .sort({ createdAt: -1 });
     res.json(reviews);
   } catch (err: any) {
     errorResponse(res, 500, err);

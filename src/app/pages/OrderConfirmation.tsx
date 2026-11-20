@@ -10,7 +10,7 @@ import confetti from 'canvas-confetti';
 
 export function OrderConfirmation() {
   const { orderId } = useParams();
-  const { orders, getOrder } = useOrders();
+  const { myOrders: orders, getOrder } = useOrders();
   const [order, setOrder] = useState<Order | undefined>(undefined);
   const [resolved, setResolved] = useState(false);
 

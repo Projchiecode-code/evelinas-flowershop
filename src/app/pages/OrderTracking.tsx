@@ -292,7 +292,9 @@ function OrderCard({ order, tab }: { order: Order; tab: Tab }) {
 }
 
 export function OrderTracking() {
-  const { orders } = useOrders();
+  // Own orders only — an admin visiting the customer tracker must not see
+  // every shopper's orders, ratings or delivery details.
+  const { myOrders: orders } = useOrders();
   const [activeTab, setActiveTab] = useState<Tab>('to-pay');
 
   // ?orderId=... (from a notification or the confirmation page) should open

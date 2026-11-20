@@ -15,7 +15,9 @@ import { formatCurrency } from '../utils/currency';
 export function Profile() {
   const { user, updateUser } = useAuth();
   const { favorites } = useFavorites();
-  const { orders } = useOrders();
+  // Stats on this page are personal — exclude other shoppers' orders even
+  // when an admin account is signed in.
+  const { myOrders: orders } = useOrders();
   const { reviews } = useReviews();
 
   const [editing, setEditing] = useState(false);

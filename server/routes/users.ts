@@ -95,16 +95,68 @@ router.patch('/:id', authenticate, requireAdmin, async (req: any, res) => {
   try {
     const { role, isActive, name, email, phone, address, city, zipCode } = req.body;
     const update: any = {};
-    if (role !== undefined) update.role = role;
-    if (isActive !== undefined) update.isActive = isActive;
-    if (name !== undefined) update.name = name;
-    if (email !== undefined) update.email = email;
-    if (phone !== undefined) update.phone = phone;
-    if (address !== undefined) update.address = address;
-    if (city !== undefined) update.city = city;
-    if (zipCode !== undefined) update.zipCode = zipCode;
 
-    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true }).select('-password');
+    if (role !== undefined) {
+      if (role !== 'customer' && role !== 'admin') {
+        return res.status(400).json({ error: 'Role must be customer or admin' });
+      }
+      // An admin may demote another admin, but not lock themselves out.
+      if (req.params.id === req.userId && role !== 'admin') {
+        return res.status(400).json({ error: 'You cannot remove your own admin access' });
+      }
+      update.role = role;
+    }
+    if (isActive !== undefined) {
+      if (typeof isActive !== 'boolean') {
+        return res.status(400).json({ error: 'isActive must be a boolean' });
+      }
+      if (req.params.id === req.userId && isActive === false) {
+        return res.status(400).json({ error: 'You cannot deactivate your own account' });
+      }
+      update.isActive = isActive;
+    }
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim() || name.trim().length > 120) {
+        return res.status(400).json({ error: 'Name must be 1-120 characters' });
+      }
+      update.name = name.trim();
+    }
+    if (email !== undefined) {
+      if (typeof email !== 'string' || email.length > 254 || !/^\S+@\S+\.\S+$/.test(email)) {
+        return res.status(400).json({ error: 'Please enter a valid email address' });
+      }
+      update.email = email.toLowerCase();
+    }
+    if (phone !== undefined) {
+      if (typeof phone !== 'string' || phone.length > 40) {
+        return res.status(400).json({ error: 'Phone must be at most 40 characters' });
+      }
+      update.phone = phone;
+    }
+    if (address !== undefined) {
+      if (typeof address !== 'string' || address.length > 300) {
+        return res.status(400).json({ error: 'Address must be at most 300 characters' });
+      }
+      update.address = address;
+    }
+    if (city !== undefined) {
+      if (typeof city !== 'string' || city.length > 120) {
+        return res.status(400).json({ error: 'City must be at most 120 characters' });
+      }
+      update.city = city;
+    }
+    if (zipCode !== undefined) {
+      if (typeof zipCode !== 'string' || zipCode.length > 20) {
+        return res.status(400).json({ error: 'ZIP code must be at most 20 characters' });
+      }
+      update.zipCode = zipCode;
+    }
+
+    const user = await User.findByIdAndUpdate(req.params.id, update, {
+      new: true,
+      runValidators: true,
+      context: 'query',
+    }).select('-password');
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -116,6 +168,11 @@ router.patch('/:id', authenticate, requireAdmin, async (req: any, res) => {
 
 router.delete('/:id', authenticate, requireAdmin, async (req: any, res) => {
   try {
+    // Deleting the signed-in admin would invalidate their own session mid-
+    // request and could leave the shop with no administrator.
+    if (req.params.id === req.userId) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });

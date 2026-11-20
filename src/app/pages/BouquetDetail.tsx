@@ -43,7 +43,8 @@ export function BouquetDetail() {
   const { addToCart } = useCart();
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { getReviewsForBouquet, getApprovedReviews, addReview } = useReviews();
-  const { orders } = useOrders();
+  // Personalisation signals must come from this shopper's own orders only.
+  const { myOrders: orders } = useOrders();
   const { getApprovedPhotos } = useGallery();
   const { user } = useAuth();
 

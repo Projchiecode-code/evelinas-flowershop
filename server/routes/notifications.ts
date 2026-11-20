@@ -51,8 +51,17 @@ const shapeForViewer = (req: any) => (doc: any) => {
 router.get('/', authenticate, async (req: any, res) => {
   try {
     const filter: any = {};
-    if (req.userRole === 'customer') {
-      // Own notifications plus shop-wide broadcasts (user: null).
+    // Personal bell (the default): own notifications plus shop-wide
+    // broadcasts (user: null). This applies to admins too — an admin alert is
+    // addressed to the admin's own account, so the bell never needs another
+    // customer's private notification. The admin Notification Management page
+    // opts into the full log with `?scope=all`.
+    const wantsAll = req.query.scope === 'all' || req.query.all === '1';
+    if (wantsAll) {
+      if (req.userRole !== 'admin') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    } else {
       filter.$or = [{ user: req.userId }, { user: null }];
     }
     const { paged, page, limit, skip } = parsePage(req, 50);

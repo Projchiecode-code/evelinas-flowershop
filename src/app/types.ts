@@ -66,6 +66,8 @@ export interface Order {
   email: string;
   createdAt: Date;
   estimatedDelivery: Date;
+  /** Owner's user id — lets customer pages filter out other shoppers' orders. */
+  customer?: string;
   trackingUpdates: TrackingUpdate[];
   rating?: number;
   ratingComment?: string;

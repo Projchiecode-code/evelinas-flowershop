@@ -39,6 +39,11 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     if (!user) {
       return res.status(401).json({ error: 'Token invalid' });
     }
+    // Deactivation is immediate: existing 7-day tokens stop working too, not
+    // just new logins.
+    if (user.isActive === false) {
+      return res.status(401).json({ error: 'Account is disabled' });
+    }
     req.userId = user._id.toString();
     req.userRole = user.role;
     next();

@@ -141,7 +141,10 @@ export const aiApi = {
 // Reviews
 export const reviewApi = {
   create: (data: any) => api.post('/reviews', data),
+  /** Public feed: approved reviews only. */
   getAll: () => api.get('/reviews'),
+  /** Admin-only moderation queue: every review, including pending ones. */
+  getAllForAdmin: () => api.get('/reviews/all'),
   getByBouquet: (bouquetId: string) => api.get(`/reviews/${bouquetId}`),
   approve: (id: string) => api.patch(`/reviews/${id}/approve`),
   feature: (id: string) => api.patch(`/reviews/${id}/feature`),
@@ -185,7 +188,10 @@ export const galleryApi = {
 // Notifications
 export const notificationApi = {
   create: (data: any) => api.post('/notifications', data),
+  /** Personal bell: own notifications + shop-wide broadcasts. */
   getAll: () => api.get('/notifications'),
+  /** Admin-only management log: every notification in the shop. */
+  getAllForAdmin: () => api.get('/notifications?scope=all'),
   markRead: (id: string) => api.patch(`/notifications/${id}/read`),
   markAllRead: () => api.patch('/notifications/read-all'),
   delete: (id: string) => api.delete(`/notifications/${id}`),

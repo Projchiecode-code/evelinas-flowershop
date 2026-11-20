@@ -21,7 +21,8 @@ const PAYMENT_LABEL: Record<string, string> = {
 };
 
 export function OrderHistory() {
-  const { orders } = useOrders();
+  // Own orders only — never another shopper's order history.
+  const { myOrders: orders } = useOrders();
   const sorted = [...orders].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   return (
@@ -55,7 +56,10 @@ export function OrderHistory() {
                     </div>
                     <div className="flex items-center gap-3">
                       <Badge className={`border flex items-center gap-1 ${cfg.color}`}>{cfg.icon}{cfg.label}</Badge>
-                      <Link to={`/track`}>
+                      {/* Carry the order id so the tracker opens the tab that
+                          actually contains this order instead of defaulting
+                          to "To Pay". */}
+                      <Link to={`/track?orderId=${encodeURIComponent(order.id)}`}>
                         <Button size="sm" variant="outline" className="border-rose-200 text-rose-600 hover:bg-rose-50 text-xs">
                           Track <ArrowRight className="w-3 h-3 ml-1" />
                         </Button>

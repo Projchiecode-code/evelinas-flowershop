@@ -68,6 +68,10 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     const timer = window.setInterval(fetchNotifications, 30000);
     const stopRealtime = subscribeRealtime({
       onNotification: raw => {
+        // Defense in depth: never surface a personal notification addressed
+        // to another account, even if a stale server pushes one. Broadcasts
+        // have no `user` and are meant for everyone.
+        if (raw?.user && String(raw.user) !== String(user?.id)) return;
         setNotifications(prev => {
           const id = raw?._id || raw?.id;
           // The poll may have already delivered it — never double-count a bell.

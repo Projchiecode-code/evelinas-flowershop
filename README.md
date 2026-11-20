@@ -129,7 +129,7 @@ Health check: `GET /api/health` → `{ "status": "ok", "message": "Evelina's Flo
 | | `POST /`, `PUT /:id`, `DELETE /:id` | admin | CRUD |
 | | `GET /seed`, `POST /seed` | admin | Re-seed demo catalog |
 | `/api/orders` | `POST /` | authenticated | Place order (atomic stock reservation; Design Studio custom bouquets are validated & priced server-side and never reserve stock) |
-| | `GET /` | customer sees own; admin sees all | List (`?page=` supported) |
+| | `GET /` | customer sees own; admin sees all | List (`?page=` supported; `?scope=mine` forces own-only for any role) |
 | | `GET /:id` | authenticated | Order detail |
 | | `PATCH /:id/status` | authenticated | Status transition; stock restock/re-reserve |
 | | `PATCH /:id/rate` | authenticated | Submit rating (blocked for cancelled orders) |
@@ -144,7 +144,7 @@ Health check: `GET /api/health` → `{ "status": "ok", "message": "Evelina's Flo
 | | `PATCH /:id/approve`, `PATCH /:id/feature` | admin | Moderation |
 | | `PATCH /:id/like` | public | Like counter |
 | | `DELETE /:id` | admin | Remove post |
-| `/api/notifications` | `GET /` | authenticated | Bell feed (admins see all) |
+| `/api/notifications` | `GET /` | authenticated | Bell feed — own notifications + shop-wide broadcasts only (`?scope=all` is admin-only and returns the full management log) |
 | | `POST /` | authenticated | Create (`broadcast` flag is admin-only) |
 | | `PATCH /:id/read`, `PATCH /read-all` | authenticated | Mark read |
 | | `DELETE /:id` | authenticated | Dismiss |

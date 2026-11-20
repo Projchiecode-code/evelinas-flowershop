@@ -90,7 +90,8 @@ export function NotificationManagement() {
   // admin broadcasts (Manual). This used to be hardcoded mock rows.
   const loadHistory = async () => {
     try {
-      const data = await notificationApi.getAll() as any[];
+      // Admin-only full log (the bell itself is scoped to this account).
+      const data = await notificationApi.getAllForAdmin() as any[];
       const rows: NotificationLog[] = (Array.isArray(data) ? data : []).map(n => ({
         id: n._id || n.id || Math.random().toString(36).slice(2),
         subject: n.title,

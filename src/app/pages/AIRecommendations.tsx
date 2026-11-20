@@ -173,7 +173,8 @@ export function AIRecommendations() {
   // Subscribes to the live catalog so results refresh if it is still loading.
   useProducts();
   const { getApprovedReviews } = useReviews();
-  const { orders } = useOrders();
+  // Personalisation signals must come from this shopper's own orders only.
+  const { myOrders: orders } = useOrders();
   const { favorites } = useFavorites();
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});

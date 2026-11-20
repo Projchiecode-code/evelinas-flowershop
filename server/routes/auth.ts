@@ -75,6 +75,11 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ error: 'Invalid email or password' });
     }
+    // Checked only after the password verifies, so a wrong guess can't reveal
+    // whether an address belongs to a disabled account.
+    if (user.isActive === false) {
+      return res.status(403).json({ error: 'This account has been disabled. Please contact support.' });
+    }
     const token = jwt.sign({ userId: user._id }, getJwtSecret(), { expiresIn: '7d' });
     const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {

@@ -44,10 +44,16 @@ export function emit(
   opts?: { userId?: string | null; admin?: boolean },
 ): void {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  // No targeting at all means a true broadcast (e.g. a shop-wide promo):
+  // deliver it to every open connection. Before this, `undefined` opts fell
+  // through to "nobody" and broadcasts only showed up on the next poll.
+  const hasTarget = !!(opts?.userId || opts?.admin);
   for (const client of clients) {
-    const targeted = !!opts?.userId && client.userId === opts.userId;
-    const admin = !!opts?.admin && client.role === 'admin';
-    if (!targeted && !admin) continue;
+    if (hasTarget) {
+      const targeted = !!opts?.userId && client.userId === opts.userId;
+      const admin = !!opts?.admin && client.role === 'admin';
+      if (!targeted && !admin) continue;
+    }
     try {
       client.res.write(payload);
     } catch {
