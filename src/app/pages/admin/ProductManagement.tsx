@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, Search, Package, X, Check, Loader2, WifiOff } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Edit2, Trash2, Search, Package, X, Check, Loader2, WifiOff, Upload } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -9,6 +9,7 @@ import { useProducts } from '../../contexts/ProductsContext';
 import { Bouquet } from '../../types';
 import { formatCurrency } from '../../utils/currency';
 import { classifyStock, unitsLeft, LOW_STOCK_THRESHOLD } from '../../utils/inventory';
+import { compressImage } from '../../utils/imageCompress';
 
 const EMPTY: Omit<Bouquet, 'id'> = {
   name: '', description: '', price: 0, image: '', category: 'Roses',
@@ -61,11 +62,37 @@ export function ProductManagement() {
   };
   const cancelForm = () => { setAdding(false); setEditing(null); };
 
+  // Upload button beside Image URL — picks a photo, compresses it in the
+  // browser (same helper gallery posts use), and stores it as a data URL in
+  // `image`, so no server file storage is needed.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await compressImage(file);
+      setForm(f => ({ ...f, image: dataUrl }));
+      toast.success('Photo uploaded — it will be saved with the product.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not process that image.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Every mutation writes to the API first, then ProductsContext refreshes the
   // shared list — so edits show up on the storefront immediately.
   const saveProduct = async () => {
     if (!form.name.trim()) {
       toast.error('Product name is required.');
+      return;
+    }
+    if (!form.image.trim()) {
+      toast.error('Add an image URL or upload a photo.');
       return;
     }
     setSaving(true);
@@ -164,8 +191,50 @@ export function ProductManagement() {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Image URL</label>
-              <Input value={form.image} onChange={e => setForm(f => ({ ...f, image: e.target.value }))} placeholder="https://..." className="border-pink-200" />
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Image</label>
+              <div className="flex gap-2">
+                <Input
+                  value={form.image.startsWith('data:') ? '' : form.image}
+                  onChange={e => setForm(f => ({ ...f, image: e.target.value }))}
+                  placeholder={form.image.startsWith('data:') ? 'Uploaded photo' : 'https://...'}
+                  className="border-pink-200"
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-pink-200 shrink-0"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Upload className="w-4 h-4" />}
+                  <span className="hidden sm:inline ml-1">{uploading ? 'Uploading…' : 'Upload'}</span>
+                </Button>
+              </div>
+              {form.image && (
+                <div className="mt-2 flex items-center gap-3">
+                  <img
+                    src={form.image}
+                    alt="Product preview"
+                    className="w-14 h-14 rounded-lg object-cover border border-pink-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, image: '' }))}
+                    className="text-xs text-gray-400 hover:text-red-500"
+                  >
+                    Remove image
+                  </button>
+                </div>
+              )}
             </div>
             <div className="sm:col-span-2">
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Description</label>
