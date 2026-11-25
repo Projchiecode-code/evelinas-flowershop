@@ -1,10 +1,9 @@
-import { useState, useRef } from 'react';
-import { Heart, Upload, Camera, Star, X, ShoppingCart, MessageCircle, Send, ChevronDown, ChevronUp, MoreHorizontal, Share2, Loader2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Heart, Upload, Camera, Star, X, ShoppingCart, MessageCircle, Send, ChevronDown, ChevronUp, MoreHorizontal, Share2, Loader2, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
-import { useFavorites } from '../contexts/FavoritesContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useGallery } from '../contexts/GalleryContext';
 import { useCart } from '../contexts/CartContext';
@@ -15,23 +14,66 @@ import { formatCurrency } from '../utils/currency';
 import { compressImage } from '../utils/imageCompress';
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
-function PostCard({ photo }: { photo: GalleryPhoto }) {
+
+export function PostCard({ photo }: { photo: GalleryPhoto }) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node)
+      ) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const { photos, featurePhoto } = useGallery();
+
   const { bouquets } = useProducts();
   const { likePhoto, likedPhotos, addComment, getCommentsForPhoto } = useGallery();
   const { addToCart } = useCart();
-  const {
-    toggleGalleryFavorite,
-    removeGalleryFavorite,
-    isGalleryFavorite,
-  } = useFavorites();
   
   const { user } = useAuth();
+
+  const { deletePhoto } = useGallery();
+
+  const handleDelete = async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this post?'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deletePhoto(photo.id);
+      toast.success('Post deleted successfully!');
+      setShowMenu(false);
+    } catch (error) {
+      console.error('Failed to delete post:', error);
+      toast.error('Failed to delete post. Please try again.');
+    }
+  };
 
   const liked = likedPhotos[photo.id] || false;
 
   const isAdmin = user?.role === 'admin';
-  const isOwner = !!user && photo.customer === user.id;
-  const isViewer = !isAdmin && !isOwner;
+
+  const isOwner =
+  !!user?.id &&
+  !!photo.customer &&
+  String(photo.customer) === String(user.id);
+
+  console.log('USER:', user);
+  console.log('PHOTO CUSTOMER:', photo.customer);
+  console.log('USER ID:', user?.id);
+  console.log('IS OWNER:', isOwner);
   
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -41,18 +83,6 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
 
   const comments = getCommentsForPhoto(photo.id);
   const linkedBouquet = bouquets.find(b => b.id === photo.bouquetId);
-
-  const isSaved = isGalleryFavorite(photo.id);
-
-  const handleSave = () => {
-    toggleGalleryFavorite(photo);
-
-    toast.success(
-      isSaved
-        ? 'Removed from Favorites'
-        : 'Saved to Favorites ❤️'
-    );
-  };
   
   const handleLike = () => {
     likePhoto(photo.id);
@@ -149,7 +179,7 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
               {photo.featured && <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 text-xs py-0">⭐ Featured</Badge>}
             </div>
           </div>
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(prev => !prev)}
               className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-600"
@@ -160,21 +190,7 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
             {showMenu && (
               <div className="absolute right-0 top-10 z-30 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2">
 
-                {/* SAVE — viewer/customer */}
-                {!isOwner && !isAdmin && (
-                  <button
-                    onClick={() => {
-                      handleSave();
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-rose-50"
-                  >
-                    <i className={`bi ${isSaved ? 'bi-bookmark-fill' : 'bi-bookmark'}`} />
-                    {isSaved ? 'Remove from Favorites' : 'Save to Favorites'}
-                  </button>
-                )}
-
-                {/* SHARE */}
+                {/* SHARE — Everyone */}
                 <button
                   onClick={() => {
                     handleShare();
@@ -186,40 +202,34 @@ function PostCard({ photo }: { photo: GalleryPhoto }) {
                   Share
                 </button>
 
-                {/* OWNER */}
-                {isOwner && (
+                {/* CUSTOMER / OWNER — Delete own post */}
+                {isOwner && !isAdmin && (
                   <button
-                    onClick={() => {
-                      // We'll connect this to deletePhoto later
-                      setShowMenu(false);
-                    }}
+                    onClick={handleDelete}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
                   >
-                    <i className="bi bi-trash" />
+                    <Trash2 className="w-4 h-4" />
                     Delete Post
                   </button>
                 )}
+
 
                 {/* ADMIN */}
                 {isAdmin && (
                   <>
                     <button
-                      onClick={() => {
-                        setShowMenu(false);
-                      }}
+                      onClick={() => featurePhoto(photo.id, !photo.featured)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-rose-50"
                     >
-                      <i className="bi bi-star" />
+                      <Star className="w-4 h-4" />
                       {photo.featured ? 'Unfeature Post' : 'Feature Post'}
                     </button>
 
                     <button
-                      onClick={() => {
-                        setShowMenu(false);
-                      }}
+                      onClick={handleDelete}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
                     >
-                      <i className="bi bi-trash" />
+                      <Trash2 className="w-4 h-4" />
                       Delete Post
                     </button>
                   </>

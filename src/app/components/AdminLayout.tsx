@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, Navigate } from 'react-router';
-import { LayoutDashboard, Package, ShoppingBag, LogOut, Flower2, ChevronRight, Zap, MessageSquare, Camera, Bell, BarChart3, ChevronDown, Menu } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, LogOut, Flower2, ChevronRight, Zap, MessageSquare, Camera, Bell, BarChart3, ChevronDown, Menu, ArrowUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { NotificationBell } from './NotificationBell';
@@ -79,7 +79,19 @@ export function AdminLayout() {
   // Off-canvas sidebar on phones: the fixed 240px rail used to overlap the
   // content (ml-60 on a 390px screen left ~150px of usable width).
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 300);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
   // Wait for /auth/me before judging the role — otherwise refreshing /admin
   // bounces a signed-in owner to the login page (user is null mid-load).
   if (isLoading) return null;
@@ -132,7 +144,7 @@ export function AdminLayout() {
           inflates the flex item past the phone viewport → page-wide scroll */}
       <main className="flex-1 min-w-0 min-h-screen md:ml-60">
         {/* Activity bar — the shop owner sees new orders and status traffic here */}
-        <div className="flex items-center justify-between gap-3 px-4 md:px-8 py-4 bg-white/70 backdrop-blur border-b border-pink-100">
+        <div className="flex items-center justify-between gap-3 px-4 md:px-8 py-4 bg-white border-b border-pink-100 sticky top-0 z-20">
           <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -149,6 +161,22 @@ export function AdminLayout() {
           <Outlet />
         </div>
       </main>
+      {/* BACK TO TOP BUTTON */}
+      {showBackToTop && (
+        <button
+          onClick={() =>
+            window.scrollTo({
+              top: 0,
+              behavior: 'smooth',
+            })
+          }
+          aria-label="Back to top"
+          title="Back to top"
+          className="fixed bottom-3 right-0 z-50 w-11 h-11 flex items-center justify-center rounded-full bg-gradient-to-r from-rose-500/70 to-purple-500/70 text-white shadow-lg hover:shadow-xl hover:scale-110 active:scale-95 transition-all duration-300"
+        >
+          <ArrowUp className="w-5 h-5" />
+        </button>
+      )}
     </div>
   );
 }

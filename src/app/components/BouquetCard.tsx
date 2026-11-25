@@ -14,7 +14,12 @@ interface BouquetCardProps {
   recommendationText?: string;
 }
 
-export function BouquetCard({ bouquet, showRecommendation, recommendationText }: BouquetCardProps) {
+interface BouquetCardProps {
+  bouquet: Bouquet;
+  variant?: 'default' | 'favorite';
+}
+
+export function BouquetCard({ bouquet, showRecommendation, recommendationText, variant = 'default' }: BouquetCardProps) {
   const { isFavorite, toggleFavorite } = useFavorites();
   const fav = isFavorite(bouquet.id);
 

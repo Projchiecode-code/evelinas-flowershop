@@ -151,8 +151,8 @@ export function Header() {
         </div>
 
         {/* Desktop Nav — flex-wrap so the 6th item never squeezes at md */}
-        <nav className="hidden md:flex border-t border-rose-50">
-          <ul className="flex flex-wrap items-center gap-1 py-2">
+        <nav className="hidden justify-center md:flex border-t border-rose-50">
+          <ul className="flex flex-wrap items-center gap-8 py-2">
             {NAV.map(n => (
               <li key={n.to}>
                 <Link

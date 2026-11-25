@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Plus, Edit2, Trash2, Search, Package, X, Check, Loader2, WifiOff, Upload } from 'lucide-react';
+import { Fragment, useEffect, useState, useRef, type ChangeEvent } from 'react';
+import { Plus, Edit2, Trash2, Search, Package, X, Check, Loader2, WifiOff } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -9,7 +9,6 @@ import { useProducts } from '../../contexts/ProductsContext';
 import { Bouquet } from '../../types';
 import { formatCurrency } from '../../utils/currency';
 import { classifyStock, unitsLeft, LOW_STOCK_THRESHOLD } from '../../utils/inventory';
-import { compressImage } from '../../utils/imageCompress';
 
 const EMPTY: Omit<Bouquet, 'id'> = {
   name: '', description: '', price: 0, image: '', category: 'Roses',
@@ -18,12 +17,83 @@ const EMPTY: Omit<Bouquet, 'id'> = {
 
 const CATEGORIES = ['Roses', 'Lilies', 'Tulips', 'Sunflowers', 'Orchids', 'Peonies', 'Mixed'];
 
+const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_DATA_URL_LENGTH = 2_000_000;
+
+async function compressProductImage(file: File): Promise<string> {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Please select a JPG, PNG, or WebP image.');
+  }
+
+  if (file.size > MAX_UPLOAD_SIZE) {
+    throw new Error('Image must not exceed 5 MB.');
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Could not load image.'));
+
+      image.src = objectUrl;
+    });
+
+    const MAX_DIMENSION = 1200;
+
+    const scale = Math.min(
+      1,
+      MAX_DIMENSION / img.width,
+      MAX_DIMENSION / img.height
+    );
+
+    const canvas = document.createElement('canvas');
+
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      throw new Error('Image processing is unavailable.');
+    }
+
+    // White background for transparent PNG images.
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    context.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    // Compress until the resulting data URL fits our limit.
+    for (const quality of [0.82, 0.72, 0.62, 0.52]) {
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+      if (dataUrl.length <= MAX_DATA_URL_LENGTH) {
+        return dataUrl;
+      }
+    }
+
+    throw new Error('Image is too large after compression. Choose another image.');
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export function ProductManagement() {
   const { bouquets, isLoading, isOffline, createProduct, updateProduct, deleteProduct } = useProducts();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Bouquet | null>(null);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState<Omit<Bouquet, 'id'>>(EMPTY);
+  const [form, setForm] = useState<Omit<Bouquet, 'id'>>({
+    ...EMPTY,
+  });
+  const [priceInput, setPriceInput] = useState('0');
+  const [processingImage, setProcessingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Phase 5: quick inventory filters ("Low stock (2)") above the table.
@@ -55,32 +125,52 @@ export function ProductManagement() {
     );
   });
 
-  const startAdd = () => { setAdding(true); setEditing(null); setForm(EMPTY); };
+  const startAdd = () => {
+    setAdding(true);
+    setEditing(null);
+    setForm(EMPTY);
+    setPriceInput('');
+  };
+
   const startEdit = (p: Bouquet) => {
     const { id, ...rest } = p;
-    setEditing(p); setAdding(false); setForm(rest);
+    setEditing(p);
+    setAdding(false);
+    setForm(rest);
+    setPriceInput(String(p.price));
   };
-  const cancelForm = () => { setAdding(false); setEditing(null); };
 
-  // Upload button beside Image URL — picks a photo, compresses it in the
-  // browser (same helper gallery posts use), and stores it as a data URL in
-  // `image`, so no server file storage is needed.
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const cancelForm = () => {
+    setAdding(false);
+    setEditing(null);
+    setPriceInput('');
+  };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (
+    e: ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-picking the same file
+
     if (!file) return;
-    setUploading(true);
+
+    setProcessingImage(true);
+
     try {
-      const dataUrl = await compressImage(file);
-      setForm(f => ({ ...f, image: dataUrl }));
-      toast.success('Photo uploaded — it will be saved with the product.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not process that image.');
+      const compressedImage = await compressProductImage(file);
+
+      setForm(prev => ({
+        ...prev,
+        image: compressedImage,
+      }));
+
+      toast.success('Product image selected successfully.');
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to process image.'
+      );
     } finally {
-      setUploading(false);
+      setProcessingImage(false);
+      e.target.value = '';
     }
   };
 
@@ -91,17 +181,44 @@ export function ProductManagement() {
       toast.error('Product name is required.');
       return;
     }
-    if (!form.image.trim()) {
-      toast.error('Add an image URL or upload a photo.');
+
+    if (!form.description.trim()) {
+      toast.error('Product description is required.');
+      return;
+    }
+
+    const enteredPrice = Number(priceInput);
+
+    const productData = {
+    ...form,
+    price: enteredPrice,
+  };
+
+    if (
+      priceInput.trim() === '' ||
+      !Number.isFinite(enteredPrice) ||
+      enteredPrice <= 0
+    ) {
+      toast.error('Product price must be greater than ₱0.');
+      return;
+    }
+
+    if (!form.image) {
+      toast.error('Please select a product image.');
+      return;
+    }
+
+    if (processingImage) {
+      toast.error('Please wait for the image to finish processing.');
       return;
     }
     setSaving(true);
     try {
       if (adding) {
-        await createProduct(form);
+        await createProduct(productData);
         toast.success(`"${form.name}" added to the catalog.`);
       } else if (editing) {
-        await updateProduct(editing.id, form);
+        await updateProduct(editing.id, productData);
         toast.success('Product updated.');
       }
       cancelForm();
@@ -158,7 +275,7 @@ export function ProductManagement() {
       )}
 
       {/* Add/Edit Form */}
-      {(adding || editing) && (
+      {adding && (
         <div className="bg-white rounded-2xl border border-pink-200 shadow-md p-6">
           <div className="flex items-center justify-between mb-5">
             <h2 className="font-bold text-gray-800">{adding ? 'Add New Product' : 'Edit Product'}</h2>
@@ -177,7 +294,15 @@ export function ProductManagement() {
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Price (₱)</label>
-              <Input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: Number(e.target.value) }))} className="border-pink-200" />
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={priceInput}
+                onChange={e => setPriceInput(e.target.value)}
+                placeholder="Enter product price"
+                className="border-pink-200"
+              />
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Stock (units)</label>
@@ -190,54 +315,82 @@ export function ProductManagement() {
                 className="border-pink-200"
               />
             </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Image</label>
-              <div className="flex gap-2">
-                <Input
-                  value={form.image.startsWith('data:') ? '' : form.image}
-                  onChange={e => setForm(f => ({ ...f, image: e.target.value }))}
-                  placeholder={form.image.startsWith('data:') ? 'Uploaded photo' : 'https://...'}
-                  className="border-pink-200"
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-pink-200 shrink-0"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {uploading
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Upload className="w-4 h-4" />}
-                  <span className="hidden sm:inline ml-1">{uploading ? 'Uploading…' : 'Upload'}</span>
-                </Button>
-              </div>
-              {form.image && (
-                <div className="mt-2 flex items-center gap-3">
-                  <img
-                    src={form.image}
-                    alt="Product preview"
-                    className="w-14 h-14 rounded-lg object-cover border border-pink-100"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, image: '' }))}
-                    className="text-xs text-gray-400 hover:text-red-500"
-                  >
-                    Remove image
-                  </button>
+            
+            {/* PRODUCT IMAGE UPLOAD */}
+            <div className="sm:col-span-2">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">
+                Product Image *
+              </label>
+
+              <div className="flex flex-col sm:flex-row gap-4 items-start">
+
+                {/* Image Preview */}
+                <div className="w-full sm:w-40 h-40 rounded-xl border-2 border-dashed border-pink-200 bg-pink-50 overflow-hidden flex items-center justify-center">
+                  {form.image ? (
+                    <img
+                      src={form.image}
+                      alt="Product preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-center text-gray-400">
+                      <Package className="w-9 h-9 mx-auto mb-2 opacity-50" />
+                      <p className="text-xs">No image selected</p>
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Upload Controls */}
+                <div className="flex flex-col gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={processingImage}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-pink-200 text-rose-600 hover:bg-pink-50"
+                  >
+                    {processingImage ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4 mr-2" />
+                    )}
+
+                    {processingImage ? 'Processing Image...' : 'Choose Image'}
+                  </Button>
+
+                  {form.image && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={processingImage}
+                      onClick={() => setForm(prev => ({ ...prev, image: '' }))}
+                      className="border-red-200 text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Remove Image
+                    </Button>
+                  )}
+
+                  <p className="text-xs text-gray-400">
+                    JPG, PNG, or WebP · Maximum 5 MB
+                  </p>
+
+                  <p className="text-xs text-gray-400">
+                    Image will automatically be resized and compressed.
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="sm:col-span-2">
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Description</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Description *</label>
               <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Product description..." className="w-full border border-pink-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-rose-400" />
             </div>
             <div>
@@ -258,7 +411,7 @@ export function ProductManagement() {
             <div className="hidden sm:block flex-1" />
             <div className="flex items-center gap-3 sm:gap-4 ml-auto">
               <Button variant="outline" onClick={cancelForm} className="border-gray-200" disabled={saving}>Cancel</Button>
-              <Button onClick={saveProduct} disabled={saving} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
+              <Button onClick={saveProduct} disabled={saving || processingImage} className="bg-gradient-to-r from-rose-500 to-purple-500 text-white">
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                 {saving ? 'Saving…' : adding ? 'Add Product' : 'Save Changes'}
               </Button>
@@ -308,8 +461,9 @@ export function ProductManagement() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
-                <tr key={p.id} className="border-b border-rose-50 hover:bg-rose-50/50 transition-colors">
+                {filtered.map(p => (
+                  <Fragment key={p.id}>
+                    <tr className="border-b border-rose-50 hover:bg-rose-50/50 transition-colors">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <img src={p.image} alt={p.name} className="w-12 h-12 rounded-xl object-cover border border-pink-100" />
@@ -352,9 +506,254 @@ export function ProductManagement() {
                       )}
                     </div>
                   </td>
-                </tr>
-              ))}
-            </tbody>
+              </tr>
+
+              {/* INLINE EDIT FORM */}
+                {editing?.id === p.id && (
+                  <tr>
+                    <td colSpan={5} className="p-4 bg-rose-50/50">
+                      <div className="bg-white rounded-2xl border border-pink-200 shadow-sm p-5">
+
+                        <div className="flex items-center justify-between mb-5">
+                          <div>
+                            <h2 className="font-bold text-gray-800">
+                              Edit Product
+                            </h2>
+                            <p className="text-xs text-gray-400">
+                              Updating: {editing.name}
+                            </p>
+                          </div>
+
+                          <button
+                            onClick={cancelForm}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        {/* PRODUCT FIELDS */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">
+                              Name *
+                            </label>
+                            <Input
+                              value={form.name}
+                              onChange={e => setForm(f => ({
+                                ...f,
+                                name: e.target.value
+                              }))}
+                              className="border-pink-200"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">
+                              Category
+                            </label>
+                            <select
+                              value={form.category}
+                              onChange={e => setForm(f => ({
+                                ...f,
+                                category: e.target.value
+                              }))}
+                              className="w-full border border-pink-200 rounded-lg px-3 py-2 text-sm"
+                            >
+                              {CATEGORIES.map(c => (
+                                <option key={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">
+                              Price (₱)
+                            </label>
+                            <Input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={priceInput}
+                              onChange={e => setPriceInput(e.target.value)}
+                              className="border-pink-200"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">
+                              Stock (units)
+                            </label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={form.stock}
+                              onChange={e => setForm(f => ({
+                                ...f,
+                                stock: Math.max(0, Math.floor(Number(e.target.value) || 0))
+                              }))}
+                              className="border-pink-200"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">
+                              Product Image
+                            </label>
+
+                            <div className="flex flex-col sm:flex-row gap-4 items-start">
+                              <div className="w-full sm:w-40 h-40 rounded-xl border border-pink-200 overflow-hidden flex items-center justify-center">
+                                {form.image ? (
+                                  <img
+                                    src={form.image}
+                                    alt="Product preview"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <Package className="w-9 h-9 text-gray-300" />
+                                )}
+                              </div>
+
+                              <div className="flex flex-col gap-2">
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  onChange={handleImageChange}
+                                  className="hidden"
+                                />
+
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={processingImage}
+                                  onClick={() => fileInputRef.current?.click()}
+                                  className="border-pink-200 text-rose-600 hover:bg-pink-50"
+                                >
+                                  {processingImage ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Plus className="w-4 h-4 mr-2" />
+                                  )}
+
+                                  {processingImage ? 'Processing...' : 'Choose Image'}
+                                </Button>
+
+                                {form.image && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={processingImage}
+                                    onClick={() => setForm(f => ({
+                                      ...f,
+                                      image: ''
+                                    }))}
+                                    className="border-red-200 text-red-500 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                      Remove Image
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">
+                              Description *
+                            </label>
+                            <textarea
+                              value={form.description}
+                              onChange={e => setForm(f => ({
+                                ...f,
+                                description: e.target.value
+                              }))}
+                              rows={3}
+                              className="w-full border border-pink-200 rounded-lg px-3 py-2 text-sm"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">
+                              Flowers
+                            </label>
+                            <Input
+                              value={form.flowers.join(', ')}
+                              onChange={e => setForm(f => ({
+                                ...f,
+                                flowers: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                              }))}
+                              className="border-pink-200"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">
+                              Occasions
+                            </label>
+                            <Input
+                              value={form.occasion.join(', ')}
+                              onChange={e => setForm(f => ({
+                                ...f,
+                                occasion: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                              }))}
+                              className="border-pink-200"
+                            />
+                          </div>
+
+                        </div>
+
+                        {/* FORM ACTIONS */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 mt-5">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={form.inStock}
+                              onChange={e => setForm(f => ({
+                                ...f,
+                                inStock: e.target.checked
+                              }))}
+                              className="accent-rose-500 w-4 h-4"
+                            />
+                            <span className="text-sm text-gray-700">
+                              In Stock
+                            </span>
+                          </label>
+
+                          <div className="flex gap-3">
+                            <Button
+                              variant="outline"
+                              onClick={cancelForm}
+                              disabled={saving}
+                            >
+                              Cancel
+                            </Button>
+
+                            <Button
+                              onClick={saveProduct}
+                              disabled={saving || processingImage}
+                              className="bg-gradient-to-r from-rose-500 to-purple-500 text-white"
+                            >
+                              {saving ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Check className="w-4 h-4 mr-2" />
+                              )}
+                              {saving ? 'Saving...' : 'Save Changes'}
+                            </Button>
+                          </div>
+                        </div>
+
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+              </Fragment>
+            ))}
+          </tbody>
           </table>
           {filtered.length === 0 && (
             <div className="py-16 text-center text-gray-400">

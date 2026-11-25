@@ -3,6 +3,7 @@ import { authApi, api } from '../api/client';
 
 export interface User {
   id: string;
+  _id?: string;
   name: string;
   email: string;
   role: 'customer' | 'admin';
@@ -11,6 +12,13 @@ export interface User {
   /** Contact details editable from the Profile page (PATCH /users/me). */
   phone?: string;
   address?: string;
+}
+
+function normalizeUser(raw: any): User {
+  return {
+    ...raw,
+    id: String(raw.id || raw._id || ''),
+  };
 }
 
 interface AuthContextType {
@@ -27,16 +35,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// The API serialises Mongo documents as `_id`; the rest of the SPA keys on
-// `user.id` (order ownership, gallery ownership, context refetches). Normalise
-// once at the boundary so `user.id` is always populated.
-function normalizeUser(raw: any): User {
-  return {
-    ...raw,
-    id: String(raw?.id || raw?._id || ''),
-  } as User;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await authApi.me();
+        const res = (await authApi.me()) as User;
         setUser(normalizeUser(res));
       } catch (err) {
         // Only drop the stored token when the server actually rejected it —
@@ -63,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const res = (await authApi.login({ email, password })) as { user: any; token?: string };
+      const res = (await authApi.login({ email, password })) as { user: User; token?: string };
       if (res.token) api.setToken(res.token);
       setUser(normalizeUser(res.user));
       return { success: true };
@@ -74,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (name: string, email: string, password: string) => {
     try {
-      const res = (await authApi.register({ name, email, password })) as { user: any; token?: string };
+      const res = (await authApi.register({ name, email, password })) as { user: User; token?: string };
       if (res.token) api.setToken(res.token);
       setUser(normalizeUser(res.user));
       return { success: true };

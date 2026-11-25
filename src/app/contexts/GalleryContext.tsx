@@ -54,10 +54,18 @@ const GalleryContext = createContext<GalleryContextType | undefined>(undefined);
 // doc is normalised the moment it enters state — both on fetch and in the
 // single-item responses that submit/approve/feature/like merge back in.
 function normalizePhoto(raw: any): GalleryPhoto {
+  const customerId =
+    typeof raw?.customer === 'object' && raw?.customer !== null
+      ? raw.customer._id || raw.customer.id
+      : raw?.customer;
+
   return {
     ...raw,
-    id: raw?.id || raw?._id || '',
-    createdAt: raw?.createdAt ? new Date(raw.createdAt) : new Date(),
+    id: String(raw?.id || raw?._id || ''),
+    customer: customerId ? String(customerId) : undefined,
+    createdAt: raw?.createdAt
+      ? new Date(raw.createdAt)
+      : new Date(),
   } as GalleryPhoto;
 }
 
@@ -83,11 +91,14 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
         if (photo.id.startsWith('g')) return;
 
         try {
-          const response = await galleryApi.getComments(photo.id);
+          const response = (await galleryApi.getComments(photo.id)) as
+            | any[]
+            | { comments?: any[] }
+            | undefined;
 
           const photoComments = Array.isArray(response)
             ? response
-            : response?.comments || [];
+            : (response as { comments?: any[] } | undefined)?.comments || [];
 
           realComments.push(
             ...photoComments.map((comment: any) => ({
@@ -269,10 +280,17 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
   const deletePhoto = async (id: string) => {
     try {
       await galleryApi.delete(id);
+
       setPhotos(prev => prev.filter(p => p.id !== id));
+      setFeaturedPhotos(prev => prev.filter(p => p.id !== id));
+
+      setComments(prev => prev.filter(c => c.photoId !== id));
+
       setTotalPosts(t => Math.max(0, t - 1));
+
     } catch (err) {
       console.error('Delete photo failed:', err);
+      throw err;
     }
   };
 
@@ -371,19 +389,28 @@ export function GalleryProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const response = await galleryApi.addComment(
+      const response = (await galleryApi.addComment(
         photoId,
         authorName,
         text
-      );
+      )) as (Partial<GalleryComment> & {
+        _id?: string;
+        photo?: string;
+        createdAt?: string | Date;
+      }) | null | undefined;
+
+      const commentData = response ?? {};
 
       const newComment: GalleryComment = {
-        ...response,
-        id: response.id || response._id,
-        photoId: response.photoId || response.photo,
-        createdAt: response.createdAt
-          ? new Date(response.createdAt)
+        ...commentData,
+        id: String(commentData.id ?? commentData._id ?? `c-${Date.now()}`),
+        photoId: commentData.photoId || commentData.photo || photoId,
+        authorName: commentData.authorName?.trim() || authorName.trim() || 'Anonymous',
+        text: commentData.text?.trim() || text.trim(),
+        createdAt: commentData.createdAt
+          ? new Date(commentData.createdAt)
           : new Date(),
+        approved: commentData.approved !== false,
       };
 
       setComments(prev => [...prev, newComment]);

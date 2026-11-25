@@ -38,6 +38,9 @@ router.post('/', authenticate, async (req: any, res) => {
       likes: 0,
     });
     await photo.save();
+    console.log('Gallery photo saved:');
+    console.log('Photo ID:', photo._id);
+    console.log('Customer ID:', photo.customer);
     res.status(201).json(photo);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -55,6 +58,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
       ]);
       return res.json(envelope(items, total, page, limit));
     }
+    
     const photos = await GalleryPhoto.find().sort({ createdAt: -1 });
     res.json(photos);
   } catch (err: any) {
@@ -62,19 +66,13 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// Get comments for a gallery photo. Pending photos have no public page, so
-// their threads stay private; `user` (the commenter's account id) is never
-// part of the public payload.
+// Get comments for a gallery photo
 router.get('/:id/comments', async (req, res) => {
   try {
-    const photo = await GalleryPhoto.findById(req.params.id).select('approved');
-    if (!photo || !photo.approved) {
-      return res.json([]);
-    }
     const comments = await GalleryComment.find({
       photo: req.params.id,
       approved: true,
-    }).select('-user').sort({ createdAt: 1 });
+    }).sort({ createdAt: 1 });
 
     res.json(comments);
   } catch (err: any) {
@@ -95,9 +93,7 @@ router.post('/:id/comments', authenticate, async (req: any, res) => {
 
     const photo = await GalleryPhoto.findById(req.params.id);
 
-    // Pending submissions aren't public yet — nobody comments on them until
-    // an admin approves the post.
-    if (!photo || !photo.approved) {
+    if (!photo) {
       return res.status(404).json({
         error: 'Photo not found',
       });
@@ -136,6 +132,14 @@ router.get('/approved', async (req, res) => {
     }
     const photos = await GalleryPhoto.find({ approved: true }).sort({ createdAt: -1 });
     res.json(photos);
+
+    console.log(
+      'Approved gallery owners:',
+      photos.map(photo => ({
+        id: photo._id,
+        customer: photo.customer,
+      }))
+    );
   } catch (err: any) {
     errorResponse(res, 500, err);
   }
@@ -152,6 +156,7 @@ router.get('/featured', async (req, res) => {
       ]);
       return res.json(envelope(items, total, page, limit));
     }
+   
     const photos = await GalleryPhoto.find({ approved: true, featured: true }).sort({ createdAt: -1 });
     res.json(photos);
   } catch (err: any) {
@@ -206,8 +211,7 @@ router.patch('/:id/like', authenticate, async (req: any, res) => {
   try {
     const photo = await GalleryPhoto.findById(req.params.id);
 
-    // Only approved photos are likeable (pending posts have no public card).
-    if (!photo || !photo.approved) {
+    if (!photo) {
       return res.status(404).json({
         error: 'Photo not found',
       });
@@ -246,16 +250,42 @@ router.patch('/:id/like', authenticate, async (req: any, res) => {
   }
 });
 
-router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+
+router.delete('/:id', authenticate, async (req, res) => {
   try {
-    const photo = await GalleryPhoto.findByIdAndDelete(req.params.id);
+    const photo = await GalleryPhoto.findById(req.params.id);
+
     if (!photo) {
-      return res.status(404).json({ error: 'Photo not found' });
+      return res.status(404).json({
+        error: 'Photo not found',
+      });
     }
-    res.json({ success: true });
+
+    const isOwner = photo.customer?.toString() === req.userId;
+    const isAdmin = req.userRole === 'admin';
+
+    // Only the post owner or an admin can delete.
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({
+        error: 'You are not authorized to delete this post',
+      });
+    }
+
+    await Promise.all([
+      GalleryLike.deleteMany({ photo: photo._id }),
+      GalleryComment.deleteMany({ photo: photo._id }),
+    ]);
+
+    await photo.deleteOne();
+
+    return res.json({
+      success: true,
+      message: 'Post deleted successfully',
+    });
   } catch (err: any) {
     errorResponse(res, 500, err);
   }
 });
+
 
 export default router;

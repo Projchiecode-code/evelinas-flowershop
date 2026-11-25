@@ -5,6 +5,31 @@ import { bouquets } from '../../src/app/data/bouquets';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { parsePage, envelope } from '../utils/pagination';
 
+const MAX_IMAGE_LENGTH = 2_000_000;
+
+function isValidProductImage(image: unknown): boolean {
+  if (typeof image !== 'string' || !image) {
+    return false;
+  }
+
+  if (image.length > MAX_IMAGE_LENGTH) {
+    return false;
+  }
+
+  // Accept compressed JPEG Base64 images from the uploader.
+  if (image.startsWith('data:image/jpeg;base64,')) {
+    return /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(image);
+  }
+
+  // Preserve compatibility with existing hosted product images.
+  try {
+    const url = new URL(image);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 const router = Router();
 
 // Seed products from existing data (one-time) - supports both GET and POST for easy browser access
@@ -66,23 +91,16 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// `image` is either a remote URL or a browser-compressed data URL (the
-// Upload button in Product Management sends those, same as gallery posts).
-// Cap matches the gallery's 1.5 MB payload limit so a huge string can't
-// bloat the catalog response every shopper downloads.
-function isImageValue(v: unknown): boolean {
-  if (typeof v !== 'string' || !v || v.length > 1_500_000) return false;
-  return v.startsWith('data:image/') || /^https?:\/\//.test(v);
-}
-
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
+    if (!isValidProductImage(req.body.image)) {
+      return res.status(400).json({
+        error: 'A valid product image is required. Maximum image size exceeded or invalid format.',
+      });
+    }
     // Whitelist — only schema fields are accepted, so a crafted body can't
     // smuggle in _id/createdAt or anything the model doesn't own.
     const { name, description, price, image, category, occasion, popularity, inStock, stock, flowers } = req.body;
-    if (!isImageValue(image)) {
-      return res.status(400).json({ error: 'Image must be an http(s) URL or an uploaded image under 1.5 MB' });
-    }
     const product = new Bouquet({ name, description, price, image, category, occasion, popularity, inStock, stock, flowers });
     await product.save();
     res.status(201).json(product);
@@ -93,11 +111,16 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
+    if (
+      req.body.image !== undefined &&
+      !isValidProductImage(req.body.image)
+    ) {
+      return res.status(400).json({
+        error: 'Invalid product image or image size exceeded.',
+      });
+    }
     // Same whitelist as POST; runValidators applies schema bounds to updates
     // too (findByIdAndUpdate skips validators by default).
-    if (req.body.image !== undefined && !isImageValue(req.body.image)) {
-      return res.status(400).json({ error: 'Image must be an http(s) URL or an uploaded image under 1.5 MB' });
-    }
     const update: Record<string, any> = {};
     for (const key of ['name', 'description', 'price', 'image', 'category', 'occasion', 'popularity', 'inStock', 'stock', 'flowers']) {
       if (req.body[key] !== undefined) update[key] = req.body[key];

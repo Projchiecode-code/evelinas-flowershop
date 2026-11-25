@@ -25,6 +25,23 @@ export function Catalog() {
     (searchParams.get('occasion') || '').split(',').filter(Boolean)
   );
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 150]);
+
+  const maxPrice = useMemo(() => {
+    const highestPrice = Math.max(
+      0,
+      ...bouquets.map(b => b.price)
+    );
+
+    return Math.max(150, Math.ceil(highestPrice / 50) * 50);
+  }, [bouquets]);
+
+  useEffect(() => {
+    setPriceRange(prev => [
+      prev[0],
+      Math.max(prev[1], maxPrice),
+    ]);
+  }, [maxPrice]);
+
   const [sortBy, setSortBy] = useState('popularity');
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -95,7 +112,12 @@ export function Catalog() {
     set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
 
   const activeFilters = [...selectedCategories, ...selectedOccasions];
-  const clearAll = () => { setSelectedCategories([]); setSelectedOccasions([]); setPriceRange([0, 150]); setSearch(''); };
+  const clearAll = () => {
+    setSelectedCategories([]);
+    setSelectedOccasions([]);
+    setPriceRange([0, maxPrice]);
+    setSearch('');
+  };
 
   const FilterContent = () => (
     <div className="space-y-4 px-4">
@@ -133,7 +155,7 @@ export function Catalog() {
         <h3 className="font-semibold text-gray-800 mb-1">
           Price: <span className="text-rose-600">₱{priceRange[0]} – ₱{priceRange[1]}</span>
         </h3>
-        <Slider min={0} max={150} step={5} value={priceRange} onValueChange={v => setPriceRange(v as [number, number])} className="[&_[role=slider]]:bg-rose-500 [&_[role=slider]]:border-rose-500" />
+        <Slider min={0} max={maxPrice} step={5} value={priceRange} onValueChange={v => setPriceRange(v as [number, number])} className="[&_[role=slider]]:bg-rose-500 [&_[role=slider]]:border-rose-500" />
       </div>
       <Button onClick={clearAll} variant="outline" className="w-full border-rose-200 text-rose-600 hover:bg-rose-50">
         Clear All Filters

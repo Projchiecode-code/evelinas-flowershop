@@ -3,7 +3,15 @@ import mongoose from 'mongoose';
 const bouquetSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
-  price: { type: Number, required: true },
+  price: {
+    type: Number,
+    required: true,
+    min: [0.01, 'Product price must be greater than 0.'],
+    validate: {
+      validator: (value: number) => Number.isFinite(value),
+      message: 'Product price must be a valid number.',
+    },
+  },
   image: { type: String, required: true },
   category: { type: String, required: true },
   occasion: [{ type: String }],
